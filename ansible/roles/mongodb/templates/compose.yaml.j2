@@ -1,0 +1,43 @@
+# Gerenciado pelo Ansible - não edite na VM.
+name: kubeshop-db
+
+services:
+  mongodb:
+    image: mongo:{{ mongo_tag }}
+    container_name: kubeshop-mongodb
+    command: [--bind_ip_all, --wiredTigerCacheSizeGB, "0.25"]
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD_FILE: /run/secrets/mongo_root_password
+      MONGO_INITDB_DATABASE: kubeshop
+      MONGO_APP_USERNAME: kubeshop
+      MONGO_APP_PASSWORD_FILE: /run/secrets/mongo_app_password
+    secrets: [mongo_root_password, mongo_app_password, mongo_tools_config]
+    # Publicado SOMENTE no IP privado; o NSG libera 27017 só para a sub-rede da aplicação.
+    ports:
+      - "{{ db_private_ip }}:27017:27017"
+    volumes:
+      - {{ mongo_data_mount }}/db:/data/db
+      - {{ mongo_data_mount }}/configdb:/data/configdb
+      - ./init.js:/docker-entrypoint-initdb.d/10-app-user.js:ro
+      - ./healthcheck.js:/opt/healthcheck.js:ro
+    restart: unless-stopped
+    security_opt: [no-new-privileges:true]
+    stop_grace_period: 30s
+    healthcheck:
+      test: [CMD, mongosh, --quiet, --file, /opt/healthcheck.js]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+secrets:
+  mongo_root_password:
+    file: ./secrets/mongo-root-password
+  mongo_app_password:
+    file: ./secrets/mongo-app-password
+  mongo_tools_config:
+    file: ./secrets/mongo-tools.yaml

@@ -1,0 +1,32 @@
+---
+# Configuração e manutenção do KubeShop.
+# Ordem: base (SO, pacotes, Docker) em todas as VMs -> banco -> aplicação -> verificação.
+
+- name: Base comum (SO, pacotes e Docker)
+  hosts: all
+  become: true
+  gather_facts: true
+  roles:
+    - os_updates
+    - packages
+    - docker
+
+- name: VM do banco (disco persistente, MongoDB e backups)
+  hosts: db
+  become: true
+  roles:
+    - data_disk
+    - mongodb
+    - backup
+
+- name: VM da aplicação (Nginx + API)
+  hosts: app
+  become: true
+  roles:
+    - app
+
+- name: Verificação do ambiente
+  hosts: app
+  become: true
+  roles:
+    - verify

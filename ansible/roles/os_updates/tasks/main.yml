@@ -1,0 +1,43 @@
+---
+- name: Aguardar o cloud-init terminar (primeira inicialização da VM)
+  ansible.builtin.command: cloud-init status --wait
+  changed_when: false
+  failed_when: false
+
+- name: Atualizar o índice de pacotes (apt update)
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+    lock_timeout: 600
+  changed_when: false
+
+- name: Listar atualizações pendentes do SO
+  ansible.builtin.shell: set -o pipefail && apt list --upgradable 2>/dev/null | tail -n +2 | wc -l
+  args:
+    executable: /bin/bash
+  register: pending_updates
+  changed_when: false
+
+- name: Mostrar atualizações pendentes
+  ansible.builtin.debug:
+    msg: "{{ pending_updates.stdout }} pacote(s) com atualização disponível (update_os={{ update_os }})"
+
+- name: Aplicar atualizações do SO (somente com update_os=true)
+  ansible.builtin.apt:
+    upgrade: dist
+    lock_timeout: 600
+  when: update_os | bool
+
+- name: Verificar se o SO pede reinicialização
+  ansible.builtin.stat:
+    path: /var/run/reboot-required
+  register: reboot_required
+  when: update_os | bool
+
+- name: Reiniciar a VM quando o kernel/bibliotecas exigirem
+  ansible.builtin.reboot:
+    reboot_timeout: 600
+    msg: "Reinício solicitado pela pipeline após atualização do SO"
+  when:
+    - update_os | bool
+    - reboot_required.stat.exists | default(false)

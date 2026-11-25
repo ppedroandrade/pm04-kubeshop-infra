@@ -1,0 +1,50 @@
+---
+# Verificações somente leitura (não alteram estado -> changed=0 no recap).
+- name: Estado dos contêineres da aplicação
+  ansible.builtin.command: docker compose -f {{ kubeshop_root }}/app/compose.yaml ps --format "{{ '{{' }}.Name{{ '}}' }} {{ '{{' }}.Status{{ '}}' }}"
+  register: app_ps
+  changed_when: false
+
+- name: Mostrar contêineres
+  ansible.builtin.debug:
+    var: app_ps.stdout_lines
+
+- name: Nginx responde (/healthz)
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ app_http_port }}/healthz"
+    status_code: 200
+  register: healthz
+  retries: 10
+  delay: 6
+  until: healthz.status == 200
+
+- name: API pronta e conectada ao MongoDB (/api/health/ready)
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ app_http_port }}/api/health/ready"
+    status_code: 200
+    return_content: true
+  register: ready
+  retries: 20
+  delay: 6
+  until: ready.status == 200
+
+- name: Versão publicada (/api/info)
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ app_http_port }}/api/info"
+    return_content: true
+  register: info
+
+- name: Mostrar versão
+  ansible.builtin.debug:
+    msg: "{{ info.json | default(info.content) }}"
+
+- name: Teste funcional do repositório (catálogo + pedido fictício)
+  ansible.builtin.command: docker exec kubeshop-api node /app/scripts/smoke.mjs http://frontend:8080
+  register: smoke
+  changed_when: false
+  when: run_smoke_test | bool
+
+- name: Resultado do teste funcional
+  ansible.builtin.debug:
+    var: smoke.stdout
+  when: run_smoke_test | bool

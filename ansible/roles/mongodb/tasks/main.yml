@@ -1,0 +1,62 @@
+---
+- name: Validar que as senhas do banco foram recebidas
+  ansible.builtin.assert:
+    that:
+      - mongo_root_password | length >= 16
+      - mongo_app_password | length >= 16
+    quiet: true
+  no_log: true
+
+- name: Diretórios do projeto MongoDB
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner }}"
+    group: "{{ item.owner }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ kubeshop_root }}/mongodb", owner: root, mode: "0755" }
+    - { path: "{{ kubeshop_root }}/mongodb/secrets", owner: "999", mode: "0700" }
+
+- name: Gravar segredos do MongoDB (legíveis só pelo usuário do contêiner)
+  ansible.builtin.copy:
+    dest: "{{ kubeshop_root }}/mongodb/secrets/{{ item.name }}"
+    content: "{{ item.value }}"
+    owner: "999"
+    group: "999"
+    mode: "0400"
+  loop:
+    - { name: mongo-root-password, value: "{{ mongo_root_password }}" }
+    - { name: mongo-app-password, value: "{{ mongo_app_password }}" }
+    - { name: mongo-tools.yaml, value: "password: {{ mongo_root_password }}\n" }
+  loop_control:
+    label: "{{ item.name }}"
+  no_log: true
+
+- name: Scripts de inicialização e healthcheck do repositório da aplicação
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "{{ kubeshop_root }}/mongodb/{{ item }}"
+    mode: "0644"
+  loop:
+    - init.js
+    - healthcheck.js
+
+- name: Arquivo Compose do MongoDB
+  ansible.builtin.template:
+    src: compose.yaml.j2
+    dest: "{{ kubeshop_root }}/mongodb/compose.yaml"
+    mode: "0644"
+
+- name: Subir/atualizar o MongoDB e aguardar ficar saudável
+  community.docker.docker_compose_v2:
+    project_src: "{{ kubeshop_root }}/mongodb"
+    state: present
+    pull: "{{ docker_pull_policy }}"
+    wait: true
+    wait_timeout: 300
+  register: mongo_compose
+
+- name: Resultado do MongoDB
+  ansible.builtin.debug:
+    msg: "MongoDB {{ mongo_tag }} em {{ db_private_ip }}:27017 (changed={{ mongo_compose.changed }})"

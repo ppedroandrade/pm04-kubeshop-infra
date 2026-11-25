@@ -1,0 +1,51 @@
+---
+# O disco de dados (LUN 0) é um recurso Terraform separado da VM.
+# Formata somente se ainda não tiver sistema de arquivos: nunca apaga dados.
+- name: Aguardar o disco de dados do MongoDB (LUN 0)
+  ansible.builtin.wait_for:
+    path: /dev/disk/azure/scsi1/lun0
+    timeout: 300
+
+- name: Resolver o dispositivo real do disco
+  ansible.builtin.command: readlink -f /dev/disk/azure/scsi1/lun0
+  register: data_disk_dev
+  changed_when: false
+
+- name: Criar ext4 se o disco estiver vazio / expandir se foi aumentado no Terraform
+  community.general.filesystem:
+    dev: "{{ data_disk_dev.stdout }}"
+    fstype: ext4
+    opts: -L mongodata
+    resizefs: true
+
+- name: Obter o UUID do disco
+  ansible.builtin.command: blkid -s UUID -o value {{ data_disk_dev.stdout }}
+  register: data_disk_uuid
+  changed_when: false
+
+- name: Montar o disco em {{ mongo_data_mount }} (persistente no fstab)
+  ansible.posix.mount:
+    path: "{{ mongo_data_mount }}"
+    src: "UUID={{ data_disk_uuid.stdout }}"
+    fstype: ext4
+    opts: defaults,nofail,noatime
+    state: mounted
+
+- name: Diretórios de dados do MongoDB (uid 999 = usuário mongodb da imagem)
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "999"
+    group: "999"
+    mode: "0750"
+  loop:
+    - "{{ mongo_data_mount }}/db"
+    - "{{ mongo_data_mount }}/configdb"
+
+- name: Diretório local de backups
+  ansible.builtin.file:
+    path: "{{ mongo_data_mount }}/backups"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"

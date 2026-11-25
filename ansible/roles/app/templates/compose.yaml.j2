@@ -1,0 +1,72 @@
+# Gerenciado pelo Ansible - não edite na VM.
+# Adaptação do compose.yaml original para hosts separados: o MongoDB roda na
+# VM exclusiva e é acessado pelo IP privado {{ db_private_ip }}.
+name: kubeshop-app
+
+x-logging: &logging
+  driver: json-file
+  options: { max-size: "10m", max-file: "3" }
+
+services:
+  frontend:
+    image: {{ docker_image }}-frontend:{{ docker_tag }}
+    container_name: kubeshop-frontend
+    ports:
+      - "0.0.0.0:{{ app_http_port }}:8080"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, "http://127.0.0.1:8080/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    networks: [web]
+    logging: *logging
+
+  api:
+    image: {{ docker_image }}-api:{{ docker_tag }}
+    container_name: kubeshop-api
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: "3000"
+      APP_VERSION: "{{ docker_tag }}"
+      MONGO_HOST: "{{ db_private_ip }}"
+      MONGO_PORT: "27017"
+      MONGO_DATABASE: kubeshop
+      MONGO_AUTH_SOURCE: kubeshop
+      MONGO_USERNAME: kubeshop
+      MONGO_PASSWORD_FILE: /run/secrets/mongo_app_password
+    secrets: [mongo_app_password]
+    restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    stop_grace_period: 20s
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3000/api/health/ready',{signal:AbortSignal.timeout(2500)}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 4s
+      retries: 3
+      start_period: 30s
+    networks: [web]
+    logging: *logging
+
+networks:
+  web:
+
+secrets:
+  mongo_app_password:
+    file: ./secrets/mongo-app-password

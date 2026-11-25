@@ -1,0 +1,149 @@
+---
+# Rotinas de operação chamadas pelo workflow "Operações".
+# routine: health | logs | restart | backup | list-backups | restore
+# service: all | frontend | api | mongodb
+
+- name: Diagnóstico e reinício da aplicação
+  hosts: app
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Estado dos contêineres (app)
+      ansible.builtin.command: docker ps -a --filter name=kubeshop- --format "table {{ '{{' }}.Names{{ '}}' }}\t{{ '{{' }}.Image{{ '}}' }}\t{{ '{{' }}.Status{{ '}}' }}"
+      register: ps
+      changed_when: false
+      when: routine in ['health', 'logs', 'restart']
+
+    - name: Mostrar estado (app)
+      ansible.builtin.debug:
+        var: ps.stdout_lines
+      when: routine in ['health', 'logs', 'restart']
+
+    - name: Saúde da API (/api/health/ready)
+      ansible.builtin.uri:
+        url: http://127.0.0.1/api/health/ready
+        return_content: true
+        status_code: [200, 503]
+      register: ready
+      when: routine == 'health'
+
+    - name: Resultado da saúde
+      ansible.builtin.debug:
+        msg: "HTTP {{ ready.status }} -> {{ ready.content }}"
+      when: routine == 'health'
+
+    - name: Logs (últimas 100 linhas)
+      ansible.builtin.command: docker logs --tail 100 kubeshop-{{ item }}
+      loop: "{{ ['frontend', 'api'] if service == 'all' else [service] }}"
+      register: logs
+      changed_when: false
+      when: routine == 'logs' and service in ['all', 'frontend', 'api']
+
+    - name: Mostrar logs
+      ansible.builtin.debug:
+        msg: "{{ (item.stdout_lines | default([])) + (item.stderr_lines | default([])) }}"
+      loop: "{{ logs.results | default([]) }}"
+      loop_control:
+        label: "{{ item.item | default('') }}"
+      when: routine == 'logs' and service in ['all', 'frontend', 'api']
+
+    - name: Reiniciar contêiner(es) da aplicação
+      ansible.builtin.command: docker restart kubeshop-{{ item }}
+      loop: "{{ ['api', 'frontend'] if service == 'all' else [service] }}"
+      when: routine == 'restart' and service in ['all', 'frontend', 'api']
+
+- name: Diagnóstico, backup e restauração do banco
+  hosts: db
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Estado do MongoDB
+      ansible.builtin.command: docker ps -a --filter name=kubeshop-mongodb --format "{{ '{{' }}.Names{{ '}}' }} {{ '{{' }}.Image{{ '}}' }} {{ '{{' }}.Status{{ '}}' }}"
+      register: dbps
+      changed_when: false
+      when: routine in ['health', 'logs', 'restart']
+
+    - name: Mostrar estado (db)
+      ansible.builtin.debug:
+        var: dbps.stdout_lines
+      when: routine in ['health', 'logs', 'restart']
+
+    - name: Uso do disco de dados
+      ansible.builtin.command: df -h /data/mongo
+      register: df
+      changed_when: false
+      when: routine == 'health'
+
+    - name: Mostrar disco
+      ansible.builtin.debug:
+        var: df.stdout_lines
+      when: routine == 'health'
+
+    - name: Logs do MongoDB
+      ansible.builtin.command: docker logs --tail 100 kubeshop-mongodb
+      register: dblogs
+      changed_when: false
+      when: routine == 'logs' and service in ['all', 'mongodb']
+
+    - name: Mostrar logs do MongoDB
+      ansible.builtin.debug:
+        msg: "{{ dblogs.stdout_lines[-60:] + dblogs.stderr_lines[-60:] }}"
+      when: routine == 'logs' and service in ['all', 'mongodb']
+
+    - name: Reiniciar MongoDB
+      ansible.builtin.command: docker restart kubeshop-mongodb
+      when: routine == 'restart' and service in ['all', 'mongodb']
+
+    - name: Aguardar MongoDB saudável após reinício
+      ansible.builtin.command: docker inspect -f "{{ '{{' }}.State.Health.Status{{ '}}' }}" kubeshop-mongodb
+      register: health
+      until: health.stdout == 'healthy'
+      retries: 30
+      delay: 5
+      changed_when: false
+      when: routine == 'restart' and service in ['all', 'mongodb']
+
+    - name: Executar backup agora
+      ansible.builtin.command: /usr/local/bin/kubeshop-backup.sh
+      register: backup
+      when: routine == 'backup'
+
+    - name: Resultado do backup
+      ansible.builtin.debug:
+        var: backup.stdout_lines
+      when: routine == 'backup'
+
+    - name: Listar backups no Azure Storage
+      ansible.builtin.command: /usr/local/bin/kubeshop-list-backups.sh
+      register: list
+      changed_when: false
+      when: routine in ['list-backups', 'backup']
+
+    - name: Backups disponíveis
+      ansible.builtin.debug:
+        var: list.stdout_lines
+      when: routine in ['list-backups', 'backup']
+
+    - name: Restaurar backup ({{ backup_name | default('latest') }})
+      ansible.builtin.command: /usr/local/bin/kubeshop-restore.sh {{ backup_name | default('latest') | quote }}
+      register: restore
+      when: routine == 'restore'
+
+    - name: Resultado da restauração
+      ansible.builtin.debug:
+        var: restore.stdout_lines
+      when: routine == 'restore'
+
+- name: Aguardar API saudável após reinício do banco/app
+  hosts: app
+  become: true
+  gather_facts: false
+  tasks:
+    - name: API pronta
+      ansible.builtin.uri:
+        url: http://127.0.0.1/api/health/ready
+      register: r
+      until: r.status == 200
+      retries: 30
+      delay: 5
+      when: routine in ['restart', 'restore']

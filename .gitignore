@@ -1,0 +1,18 @@
+# Terraform
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfplan
+tfplan
+plan.txt
+crash.log
+*.tfvars
+!*.tfvars.example
+.terraform.lock.hcl.bak
+# Ansible / segredos locais
+ansible/inventory/hosts.ini
+*.retry
+.secrets/
+*.pem
+*_admin
+.env

@@ -1,0 +1,83 @@
+name: "App: publicar imagens (CI/CD da aplicação)"
+run-name: "imagens ${{ inputs.version }} (ref ${{ inputs.app_ref }}) por @${{ github.actor }}"
+
+# Representa o CI/CD da aplicação que a Zibiska Korp já possui: ele gera as
+# imagens versionadas do KubeShop e publica no GitHub Container Registry.
+# O ponto de integração com a infraestrutura é a TAG publicada aqui, que é
+# informada no parâmetro docker_tag do workflow "Infra".
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Tag das imagens (ex.: 1.0.0, 1.0.1)"
+        type: string
+        default: "1.0.0"
+      app_ref:
+        description: "Branch/tag/commit do repositório da aplicação"
+        type: string
+        default: main
+      app_repository:
+        description: Repositório da aplicação
+        type: string
+        default: LaercioMLB/kube-shop-v2
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    name: Build e push (${{ matrix.component }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: true
+      matrix:
+        component: [api, frontend]
+        include:
+          - component: api
+            dockerfile: apps/backend/Dockerfile
+          - component: frontend
+            dockerfile: apps/frontend/Dockerfile
+    steps:
+      - name: Checkout da aplicação
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.app_repository }}
+          ref: ${{ inputs.app_ref }}
+
+      - name: Nome da imagem
+        id: meta
+        env:
+          OWNER: ${{ github.repository_owner }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          owner="$(echo "$OWNER" | tr '[:upper:]' '[:lower:]')"
+          echo "image=ghcr.io/${owner}/kubeshop-${{ matrix.component }}:${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "revision=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build e push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.image }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.version=${{ inputs.version }}
+            org.opencontainers.image.revision=${{ steps.meta.outputs.revision }}
+          cache-from: type=gha,scope=${{ matrix.component }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.component }}
+
+      - name: Resumo
+        run: echo "- \`${{ steps.meta.outputs.image }}\` (commit ${{ steps.meta.outputs.revision }})" >> "$GITHUB_STEP_SUMMARY"

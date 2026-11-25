@@ -1,0 +1,45 @@
+---
+# Valores padrão. A pipeline sobrescreve com --extra-vars (parâmetros + outputs do Terraform).
+environment_name: dev
+
+# Imagens da aplicação (publicadas pelo workflow app-images.yml no GHCR)
+docker_image: ghcr.io/ppedroandrade/kubeshop
+docker_tag: "1.0.0"
+mongo_tag: "8.0.17"
+# missing = só baixa se a tag não existir na VM (idempotente);
+# always  = força verificar o registro (use se publicar de novo a mesma tag)
+docker_pull_policy: missing
+
+# Manutenção
+update_os: false
+base_packages:
+  - ca-certificates
+  - curl
+  - gnupg
+  - jq
+  - netcat-openbsd
+  - unattended-upgrades
+extra_packages: []
+
+# Rede / segredos (vêm do Terraform)
+db_private_ip: "10.20.2.10"
+mongo_root_password: ""
+mongo_app_password: ""
+
+# Registro privado (token temporário do GitHub Actions)
+registry_host: ghcr.io
+registry_username: ""
+registry_token: ""
+
+# Backup
+backup_container_url: ""
+backup_sas: ""
+backup_cron_hour: "3"
+backup_local_retention_days: 7
+
+# Diretórios
+kubeshop_root: /opt/kubeshop
+mongo_data_mount: /data/mongo
+app_http_port: 80
+
+run_smoke_test: true

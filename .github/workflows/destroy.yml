@@ -1,0 +1,85 @@
+name: "Desativar ambiente (destroy)"
+run-name: "DESTROY · ${{ inputs.environment }} · por @${{ github.actor }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        type: choice
+        options: [dev, homolog, prod]
+        default: dev
+      backup_before:
+        description: Fazer backup do MongoDB antes de destruir
+        type: boolean
+        default: true
+      confirm:
+        description: "Digite DESTRUIR-<ambiente> (ex.: DESTRUIR-dev)"
+        type: string
+        required: true
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: infra-${{ inputs.environment }}
+  cancel-in-progress: false
+
+env:
+  ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+  ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+  ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+  ARM_USE_OIDC: "true"
+  TF_IN_AUTOMATION: "true"
+  P_ENV: ${{ inputs.environment }}
+
+jobs:
+  destroy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - name: Confirmação
+        if: inputs.confirm != format('DESTRUIR-{0}', inputs.environment)
+        run: |
+          echo "::error::Confirmação inválida. Digite exatamente DESTRUIR-${P_ENV}"
+          exit 1
+
+      - uses: actions/checkout@v4
+
+      - name: Azure + terraform init
+        uses: ./.github/actions/azure-terraform
+        with:
+          environment: ${{ inputs.environment }}
+
+      - name: Outputs atuais
+        id: exists
+        run: |
+          terraform -chdir=terraform output -json > "$RUNNER_TEMP/tf.json"
+          echo "ok=$(jq 'has("app_public_ip")' "$RUNNER_TEMP/tf.json")" >> "$GITHUB_OUTPUT"
+
+      - name: Backup final antes da desativação
+        if: inputs.backup_before && steps.exists.outputs.ok == 'true'
+        run: |
+          bash scripts/render-inventory.sh "$RUNNER_TEMP/tf.json"
+          python3 -m venv "$RUNNER_TEMP/venv" && . "$RUNNER_TEMP/venv/bin/activate"
+          pip install --quiet "ansible>=11,<12"
+          bash scripts/ssh-access.sh open
+          cd ansible && ansible-playbook -i "$INVENTORY" operations.yml -e routine=backup -e service=all
+
+      - name: terraform plan -destroy
+        working-directory: terraform
+        run: terraform plan -destroy -no-color -input=false -out=destroy.tfplan
+
+      - name: terraform apply (destroy)
+        working-directory: terraform
+        run: terraform apply -no-color -input=false destroy.tfplan
+
+      - name: O que continua existindo (e gerando custo)
+        run: |
+          {
+            echo "### Ambiente ${P_ENV} desativado"
+            echo "- Removidos: resource group rg-<prefixo>-${P_ENV} (VMs, discos de SO, disco de dados do MongoDB, IP público, VNet, NSGs)."
+            echo "- **Preservado:** conta \`${STATE_SA}\` em \`${SHARED_RG}\`: estado Terraform (tfstate/${P_ENV}.tfstate) e backups em \`backups-${P_ENV}\` (retenção de 30 dias). Custo residual: centavos/mês."
+            echo "- Para recriar: workflow Infra com operation=apply e depois Operações → restore."
+            echo "- Para apagar tudo de vez: excluir o resource group \`${SHARED_RG}\` no portal (remove backups e estados de TODOS os ambientes)."
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,14 @@
+# Gerado pela pipeline a partir dos outputs do Terraform (scripts/render-inventory.sh).
+[app]
+vm-kubeshop-app-dev ansible_host=20.0.0.10
+
+[db]
+vm-kubeshop-db-dev ansible_host=10.20.2.10
+
+[all:vars]
+ansible_user=azureops
+ansible_ssh_private_key_file=~/.ssh/kubeshop_admin
+
+[db:vars]
+# O banco não tem IP público: o acesso administrativo passa pela VM da aplicação.
+ansible_ssh_common_args=-o ProxyCommand="ssh -W %h:%p -q -i ~/.ssh/kubeshop_admin -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null azureops@20.0.0.10"

@@ -1,0 +1,115 @@
+name: "Operações: saúde, logs, reinício, backup e restauração"
+run-name: "${{ inputs.routine }} · ${{ inputs.environment }} · ${{ inputs.service }} · por @${{ github.actor }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        type: choice
+        options: [dev, homolog, prod]
+        default: dev
+      routine:
+        description: "health/logs/list-backups = leitura | restart/backup = cotidianas | restore = SUBSTITUI os dados"
+        type: choice
+        options: [health, logs, restart, backup, list-backups, restore]
+        default: health
+      service:
+        description: Serviço alvo (logs e restart)
+        type: choice
+        options: [all, frontend, api, mongodb]
+        default: all
+      backup_name:
+        description: "restore: nome do arquivo de backup ou 'latest'"
+        type: string
+        default: latest
+      confirm:
+        description: "restore: digite RESTAURAR para confirmar"
+        type: string
+        default: ""
+  schedule:
+    # Backup automático também pela pipeline (além do cron na VM), 05:30 UTC
+    - cron: "30 5 * * *"
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: infra-${{ inputs.environment || 'dev' }}
+  cancel-in-progress: false
+
+env:
+  ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+  ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+  ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+  ARM_USE_OIDC: "true"
+  P_ENV: ${{ inputs.environment || 'dev' }}
+  P_ROUTINE: ${{ inputs.routine || 'backup' }}
+  P_SERVICE: ${{ inputs.service || 'all' }}
+  P_BACKUP: ${{ inputs.backup_name || 'latest' }}
+
+jobs:
+  run:
+    name: Rotina
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Confirmação de ação destrutiva
+        if: env.P_ROUTINE == 'restore' && inputs.confirm != 'RESTAURAR'
+        run: |
+          echo "::error::restore substitui os pedidos atuais. Digite RESTAURAR no campo confirm."
+          exit 1
+
+      - uses: actions/checkout@v4
+
+      - name: Azure + terraform init
+        uses: ./.github/actions/azure-terraform
+        with:
+          environment: ${{ env.P_ENV }}
+
+      - name: Verificar se o ambiente existe
+        id: exists
+        run: |
+          terraform -chdir=terraform output -json > "$RUNNER_TEMP/tf.json"
+          if [ "$(jq 'has("app_public_ip")' "$RUNNER_TEMP/tf.json")" != "true" ]; then
+            echo "Ambiente ${P_ENV} não está provisionado; nada a fazer." | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Inventário
+        if: steps.exists.outputs.ok == 'true'
+        run: bash scripts/render-inventory.sh "$RUNNER_TEMP/tf.json"
+
+      - uses: actions/setup-python@v5
+        if: steps.exists.outputs.ok == 'true'
+        with:
+          python-version: "3.12"
+      - if: steps.exists.outputs.ok == 'true'
+        run: pip install --quiet "ansible>=11,<12"
+
+      - name: Liberar SSH temporário
+        if: steps.exists.outputs.ok == 'true'
+        run: bash scripts/ssh-access.sh open
+
+      - name: Executar rotina
+        if: steps.exists.outputs.ok == 'true'
+        working-directory: ansible
+        run: |
+          set -o pipefail
+          ansible-playbook -i "$INVENTORY" operations.yml \
+            -e "routine=${P_ROUTINE}" -e "service=${P_SERVICE}" -e "backup_name=${P_BACKUP}" \
+            | tee "$RUNNER_TEMP/ops.log"
+          {
+            echo "### ${P_ROUTINE} (${P_ENV})"
+            echo '```'
+            grep -E '"(msg|stdout_lines)"|^ok:|^changed:|BACKUP_NAME|pedidos|HTTP|kubeshop-' "$RUNNER_TEMP/ops.log" | head -80
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Fechar SSH temporário
+        if: always()
+        run: |
+          if [ -n "${RESOURCE_GROUP:-}" ]; then bash scripts/ssh-access.sh close; fi
+          rm -f ~/.ssh/kubeshop_admin

@@ -1,0 +1,13 @@
+---
+- name: Instalar pacotes base (rede, certificados, utilitários)
+  ansible.builtin.apt:
+    name: "{{ base_packages }}"
+    state: present
+    lock_timeout: 600
+
+- name: Instalar pacotes adicionais solicitados na pipeline
+  ansible.builtin.apt:
+    name: "{{ extra_packages }}"
+    state: present
+    lock_timeout: 600
+  when: extra_packages | length > 0

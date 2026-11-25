@@ -1,0 +1,43 @@
+---
+- name: Diretório de configuração dos backups
+  ansible.builtin.file:
+    path: /etc/kubeshop
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Configuração do destino dos backups (SAS restrita ao container do ambiente)
+  ansible.builtin.copy:
+    dest: /etc/kubeshop/backup.env
+    owner: root
+    group: root
+    mode: "0600"
+    content: |
+      ENVIRONMENT={{ environment_name }}
+      BACKUP_URL={{ backup_container_url }}
+      BACKUP_SAS={{ backup_sas | regex_replace('^\?', '') }}
+      LOCAL_DIR={{ mongo_data_mount }}/backups
+      RETENTION_DAYS={{ backup_local_retention_days }}
+  no_log: true
+
+- name: Scripts de backup, restauração e listagem
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "/usr/local/bin/{{ item }}"
+    owner: root
+    group: root
+    mode: "0750"
+  loop:
+    - kubeshop-backup.sh
+    - kubeshop-restore.sh
+    - kubeshop-list-backups.sh
+
+- name: Backup automático diário (cron)
+  ansible.builtin.cron:
+    name: kubeshop-mongodb-backup
+    cron_file: kubeshop-backup
+    user: root
+    minute: "0"
+    hour: "{{ backup_cron_hour }}"
+    job: /usr/local/bin/kubeshop-backup.sh >> /var/log/kubeshop-backup.log 2>&1
