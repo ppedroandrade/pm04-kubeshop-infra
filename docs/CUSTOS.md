@@ -15,27 +15,31 @@
 
 | Recurso | Qtde | Especificação | Motivo do dimensionamento | USD/mês (aprox.) |
 |---|---|---|---|---|
-| VM aplicação `Standard_B2s` | 1 | 2 vCPU, 4 GB | Nginx + API Node.js e folga para build/pull de imagens; burstable porque o tráfego de uma loja nova é baixo e em picos | 49,06 |
-| VM banco `Standard_B1ms` | 1 | 1 vCPU, 2 GB | MongoDB com cache WiredTiger limitado a 0,25 GB (mesmo valor do compose do cliente); volume de dados pequeno | 24,53 |
+| VM aplicação `Standard_D2s_v4` | 1 | 2 vCPU, 8 GB | Nginx + API Node.js e folga para pull/recriação de contêineres | 111,69 |
+| VM banco `Standard_D2s_v4` | 1 | 2 vCPU, 8 GB | MongoDB exclusivo (cache WiredTiger limitado a 0,25 GB, como no compose do cliente) | 111,69 |
 | Disco SO StandardSSD (E4, 32 GiB) | 2 | 30 GB cada | imagem Ubuntu 24.04 | ~5 |
 | Disco de dados StandardSSD (E3, 16 GiB) | 1 | 16 GB | dados do MongoDB + backups locais (7 dias) | ~1,5 |
 | IP público Standard estático | 1 | com rótulo DNS `*.brazilsouth.cloudapp.azure.com` | endereço fixo para a loja | ~3,7 |
 | Storage Account (LRS) | 1 | tfstate + backups (30 dias) | estado versionado e cópias fora das VMs | < 1 |
 | Tráfego de saída | — | primeiros 100 GB/mês gratuitos | loja com poucos acessos | 0 |
 | GitHub Actions / GHCR | — | repositório público | minutos e pacotes gratuitos para repositório público | 0 |
-| **Total estimado** | | | | **≈ 85 USD/mês** |
+| **Total estimado** | | | | **≈ 235 USD/mês** (≈ 7,7 USD/dia) |
 
-Na demonstração do cenário 2 (`app_vm_size=Standard_B2ms`, 0,134 USD/h), a VM da aplicação passa a ~97,8 USD/mês. Com isso, o total sobe para ≈ 134 USD/mês enquanto o tamanho maior estiver ativo.
+### Por que não a série B (mais barata)?
+
+O dimensionamento ideal para esta demanda seria `Standard_B2s` (app, 49 USD/mês) + `Standard_B1ms` (banco, 25 USD/mês), total ≈ 85 USD/mês. Mas a assinatura de avaliação usada **bloqueia toda a série B** em Brazil South e East US 2 (`NotAvailableForSubscription`, verificado com `az vm list-skus` em 25/11/2026). A cota regional também é de 4 vCPUs. Por isso a escolha foi o menor tamanho liberado com controlador SCSI: `D2s_v4` (2 vCPU) nas duas VMs, que usa exatamente as 4 vCPUs. Em uma assinatura pay-as-you-go, basta trocar os parâmetros `app_vm_size`/`db_vm_size` para B2s/B1ms. O código não muda.
+
+Na demonstração do cenário 2 (`app_vm_size=Standard_E2s_v4`, 2 vCPU/16 GB, 0,201 USD/h), a VM da aplicação passa a ~146,7 USD/mês enquanto o tamanho maior estiver ativo.
 
 ## Créditos (não ocultam o custo recorrente)
 
-A assinatura usada tem crédito de avaliação gratuita (R$ 1.075,17, válido até 11/12/2026). O valor acima é o **custo recorrente real** depois que o crédito acabar. O crédito só paga o período do trabalho.
+A assinatura usada tem crédito de avaliação gratuita (R$ 1.075,17, válido até 11/12/2026). O valor acima é o **custo recorrente real** depois que o crédito acabar. No ritmo de ~7,7 USD/dia, o crédito cobre o período do trabalho, mas o ambiente deve ser desativado (workflow `destroy`) depois da apresentação.
 
 ## Como reduzir
 
 - Desligar o ambiente fora do horário de uso, ou usar o workflow `destroy` e recriar depois com `apply` + `restore`. O estado e os backups ficam preservados.
 - Reserva de 1 ano das VMs B-series: cerca de 40% de desconto.
-- `Standard_B2als_v2` (AMD, 2 vCPU/4 GB, ~0,060 USD/h) no lugar de `B2s`, se houver cota.
+- Em assinatura paga: série B (`B2s` + `B1ms`) reduz o total para ≈ 85 USD/mês.
 
 ## Fatores que alteram o consumo
 

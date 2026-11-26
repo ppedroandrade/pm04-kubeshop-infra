@@ -12,14 +12,14 @@ Infraestrutura do **KubeShop** (Zibiska Korp) na Microsoft Azure, provisionada c
                        │
           ┌────────────▼─────────────┐   VNet 10.20.0.0/16 (brazilsouth)
           │ snet-app 10.20.1.0/24    │
-          │ VM app  (Standard_B2s)   │   NSG app: 80 liberada · 22 só p/ IP do runner, temporário
+          │ VM app (Standard_D2s_v4) │   NSG app: 80 liberada · 22 só p/ IP do runner, temporário
           │  ├ kubeshop-frontend      │   (React + Nginx, porta 80 -> 8080)
           │  └ kubeshop-api           │   (Node.js/Express :3000, só na rede Docker)
           └────────────┬─────────────┘
                        │ 27017 (rede privada)
           ┌────────────▼─────────────┐
           │ snet-db 10.20.2.0/24     │   NSG db: 27017 e 22 SÓ a partir de snet-app; resto negado
-          │ VM db (Standard_B1ms)    │   sem IP público
+          │ VM db (Standard_D2s_v4)  │   sem IP público
           │  └ kubeshop-mongodb       │   (mongo 8.0.17 autenticado)
           │ Disco gerenciado 16 GB ──┼── /data/mongo (dados + backups locais)
           └────────────┬─────────────┘
@@ -57,8 +57,8 @@ Infraestrutura do **KubeShop** (Zibiska Korp) na Microsoft Azure, provisionada c
 | `operation` | `apply` / `plan` | `plan` só mostra as mudanças |
 | `environment` | `dev` / `homolog` / `prod` | resource group, rede e estado (`<env>.tfstate`) próprios |
 | `instance_name` | `kubeshop` | nome das VMs `vm-<nome>-app-<env>` (mudar recria as VMs) |
-| `app_vm_size` | `Standard_B2s` | instance_type da VM app (redimensiona sem recriar) |
-| `db_vm_size` | `Standard_B1ms` | instance_type da VM db (dados preservados no disco separado) |
+| `app_vm_size` | `Standard_D2s_v4` | instance_type da VM app (redimensiona sem recriar) |
+| `db_vm_size` | `Standard_D2s_v4` | instance_type da VM db (dados preservados no disco separado) |
 | `docker_image` | vazio = `ghcr.io/<dono>/kubeshop` | prefixo das imagens `-api` / `-frontend` |
 | `docker_tag` | `1.0.0` | versão da aplicação (atualização controlada dos contêineres) |
 | `mongo_tag` | `8.0.17` | versão do MongoDB |
@@ -78,7 +78,7 @@ Pré-requisitos (uma vez, já configurado): App Registration com credencial fede
 | Cenário | Como demonstrar | O que esperar |
 |---|---|---|
 | 1 · Criação inicial | Infra com padrões | `Plan: N to add`; Ansible instala Docker, sobe MongoDB e app; smoke test `PASS` |
-| 2 · Atualização | Publicar imagens `1.0.1`; Infra com `app_vm_size=Standard_B2ms`, `docker_tag=1.0.1`, `extra_packages=curl,git,unzip,htop`, `update_os=true` | `Plan: 0 to add, 1 to change, 0 to destroy` (resize in-place); Ansible recria só api/frontend; `/api/info` mostra `1.0.1`; pedidos anteriores continuam lá |
+| 2 · Atualização | Publicar imagens `1.0.1`; Infra com `app_vm_size=Standard_E2s_v4`, `docker_tag=1.0.1`, `extra_packages=curl,git,unzip,htop`, `update_os=true` | `Plan: 0 to add, 1 to change, 0 to destroy` (resize in-place); Ansible recria só api/frontend; `/api/info` mostra `1.0.1`; pedidos anteriores continuam lá |
 | 3 · Reexecução | Repetir o cenário 2 com os mesmos parâmetros | `No changes.` no Terraform; `changed=0` no PLAY RECAP |
 | Persistência | Criar pedido → Operações `restart` (mongodb) → pedido continua; alterar `db_vm_size` → pedido continua | |
 | Backup/restauração | Operações `backup` → criar pedido novo → `restore` com `RESTAURAR` → contagem volta | |
