@@ -26,13 +26,13 @@ variable "location" {
 variable "app_vm_size" {
   description = "Tamanho da VM da aplicação (Nginx + API)."
   type        = string
-  default     = "Standard_B2s"
+  default     = "Standard_D2s_v4"
 }
 
 variable "db_vm_size" {
   description = "Tamanho da VM exclusiva do MongoDB."
   type        = string
-  default     = "Standard_B1ms"
+  default     = "Standard_D2s_v4"
 }
 
 variable "db_data_disk_size_gb" {

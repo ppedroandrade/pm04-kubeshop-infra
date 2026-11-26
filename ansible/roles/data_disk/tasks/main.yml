@@ -1,13 +1,17 @@
 ---
 # O disco de dados (LUN 0) é um recurso Terraform separado da VM.
 # Formata somente se ainda não tiver sistema de arquivos: nunca apaga dados.
-- name: Aguardar o disco de dados do MongoDB (LUN 0)
-  ansible.builtin.wait_for:
-    path: /dev/disk/azure/scsi1/lun0
-    timeout: 300
-
-- name: Resolver o dispositivo real do disco
-  ansible.builtin.command: readlink -f /dev/disk/azure/scsi1/lun0
+- name: Aguardar o disco de dados do MongoDB (LUN 0, SCSI ou NVMe)
+  ansible.builtin.shell: |
+    for i in $(seq 1 60); do
+      for p in /dev/disk/azure/scsi1/lun0 /dev/disk/azure/data/by-lun/0; do
+        if [ -e "$p" ]; then readlink -f "$p"; exit 0; fi
+      done
+      sleep 5
+    done
+    echo "disco LUN 0 não encontrado" >&2; exit 1
+  args:
+    executable: /bin/bash
   register: data_disk_dev
   changed_when: false
 
