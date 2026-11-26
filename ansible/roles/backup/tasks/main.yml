@@ -14,11 +14,11 @@
     group: root
     mode: "0600"
     content: |
-      ENVIRONMENT={{ environment_name }}
-      BACKUP_URL={{ backup_container_url }}
-      BACKUP_SAS={{ backup_sas | regex_replace('^\?', '') }}
-      LOCAL_DIR={{ mongo_data_mount }}/backups
-      RETENTION_DAYS={{ backup_local_retention_days }}
+      ENVIRONMENT='{{ environment_name }}'
+      BACKUP_URL='{{ backup_container_url }}'
+      BACKUP_SAS='{{ backup_sas | regex_replace('^\?', '') }}'
+      LOCAL_DIR='{{ mongo_data_mount }}/backups'
+      RETENTION_DAYS='{{ backup_local_retention_days }}'
   no_log: true
 
 - name: Scripts de backup, restauração e listagem
