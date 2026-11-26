@@ -72,8 +72,13 @@ env:
   TF_VAR_location: ${{ vars.AZURE_LOCATION || 'brazilsouth' }}
 
 jobs:
+  security:
+    name: Segurança (segredos)
+    uses: ./.github/workflows/security.yml
+
   terraform:
     name: Terraform (validar, planejar, aplicar)
+    needs: security
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     outputs:

@@ -1,0 +1,38 @@
+name: "Segurança: varredura de segredos e IaC"
+
+# Garante o REQ-04 do escopo: nenhuma senha, chave ou token no repositório.
+# Roda a cada push/PR e também antes de cada execução da pipeline de infra.
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  secrets-scan:
+    name: Gitleaks (segredos no código e no histórico)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Varredura de segredos
+        run: |
+          docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:v8.21.2 \
+            detect --source /repo --redact --no-banner --exit-code 1 -v
+          echo "### Gitleaks: nenhum segredo encontrado no código nem no histórico" >> "$GITHUB_STEP_SUMMARY"
+
+  compose-check:
+    name: Compose sem credenciais em texto
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compose usa apenas Docker secrets (arquivos), nunca senha em texto
+        run: |
+          if grep -nE '(PASSWORD|SECRET|TOKEN|KEY)\s*:\s*[^/ ]' ansible/roles/*/templates/compose.yaml.j2 | grep -v '_FILE'; then
+            echo "::error::Credencial em texto no compose"; exit 1
+          fi
+          echo "### Compose: credenciais só via Docker secrets (/run/secrets/*)" >> "$GITHUB_STEP_SUMMARY"
