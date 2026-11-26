@@ -8,12 +8,13 @@ Infraestrutura do **KubeShop** (Zibiska Korp) na Microsoft Azure, provisionada c
 ## Arquitetura
 
 ```
-                Internet (HTTP 80)
+          Internet (HTTPS 443 / HTTP 80)
                        │
           ┌────────────▼─────────────┐   VNet 10.20.0.0/16 (brazilsouth)
           │ snet-app 10.20.1.0/24    │
-          │ VM app (Standard_D2s_v4) │   NSG app: 80 liberada · 22 só p/ IP do runner, temporário
-          │  ├ kubeshop-frontend      │   (React + Nginx, porta 80 -> 8080)
+          │ VM app (Standard_D2s_v4) │   NSG app: 80/443 liberadas · 22 só p/ IP do runner, temporário
+          │  ├ kubeshop-caddy         │   (TLS automático Let's Encrypt, :80/:443)
+          │  ├ kubeshop-frontend      │   (React + Nginx :8080, só na rede Docker)
           │  └ kubeshop-api           │   (Node.js/Express :3000, só na rede Docker)
           └────────────┬─────────────┘
                        │ 27017 (rede privada)
@@ -39,6 +40,7 @@ Infraestrutura do **KubeShop** (Zibiska Korp) na Microsoft Azure, provisionada c
 | REQ-04 · Acessos | Pipeline autentica na Azure por **OIDC** (sem segredo guardado); chave SSH e senhas geradas pelo Terraform, guardadas só no state; SSH aberto só para o IP do runner durante a execução; `no_log` e `::add-mask::` nos logs |
 | REQ-05 · Persistência | Dados no **disco gerenciado separado** da VM: reinício, troca de tamanho e até recriação da VM preservam os pedidos |
 | §9 Backup/restauração | `mongodump` diário (cron na VM + schedule da pipeline) → Azure Blob; restauração pelo workflow Operações |
+| DNS e TLS (§5) | Rótulo DNS do Azure `kubeshop-<env>-<sufixo>.brazilsouth.cloudapp.azure.com`; Caddy emite e renova o certificado sozinho. HTTP continua respondendo (fallback se a emissão falhar) |
 | §9 Desativar | workflow `destroy` com confirmação, backup antes e resumo do que continua gerando custo |
 
 ## Pipelines
@@ -71,7 +73,7 @@ Pré-requisitos (uma vez, já configurado): App Registration com credencial fede
 
 1. **Actions → App: publicar imagens → Run workflow** com `version=1.0.0`.
 2. **Actions → Infra: provisionar e configurar → Run workflow** com os parâmetros padrão.
-3. Abrir a URL da loja mostrada no resumo da execução (`http://kubeshop-dev-xxxxx.brazilsouth.cloudapp.azure.com/`).
+3. Abrir a URL da loja mostrada no resumo da execução (`https://kubeshop-dev-xxxxx.brazilsouth.cloudapp.azure.com/`).
 
 ### Cenários da apresentação
 

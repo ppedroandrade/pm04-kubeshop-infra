@@ -203,14 +203,21 @@ jobs:
         run: |
           curl -fsS --retry 5 --retry-delay 5 "http://${APP_FQDN}/api/health/ready"; echo
           curl -fsS "http://${APP_FQDN}/api/info"; echo
+          if curl -fsS --retry 6 --retry-delay 10 --retry-all-errors -o /dev/null "https://${APP_FQDN}/healthz"; then
+            https_status="OK (certificado válido)"
+          else
+            https_status="ainda sem certificado; loja disponível por HTTP"
+            echo "::warning::HTTPS ainda não respondeu com certificado válido em https://${APP_FQDN}/"
+          fi
+          echo "HTTPS: ${https_status}"
           if nc -z -w 5 "${APP_PUBLIC_IP}" 27017; then
             echo "::error::Porta 27017 respondeu pela internet!"; exit 1
           fi
           echo "OK: 27017 não aceita conexões públicas (o banco não tem IP público e o NSG só libera a sub-rede da aplicação)"
           {
             echo "### Ambiente ${{ inputs.environment }}"
-            echo "- Loja: ${STORE_URL}"
-            echo "- IP público da aplicação: ${APP_PUBLIC_IP}"
+            echo "- Loja (HTTPS): https://${APP_FQDN}/ (${https_status})"
+            echo "- Loja (HTTP): http://${APP_FQDN}/ · IP ${APP_PUBLIC_IP}"
             echo "- MongoDB: sem IP público; porta 27017 fechada para a internet"
           } >> "$GITHUB_STEP_SUMMARY"
 

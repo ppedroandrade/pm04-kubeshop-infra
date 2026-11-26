@@ -68,6 +68,7 @@ Não existe acesso público ao MongoDB. Para administração manual (exceção):
 | `AADSTS700213 No matching federated identity` | workflow rodado de outro branch | rodar do `main` (a federação é só para `main`) |
 | `SkuNotAvailable` / `QuotaExceeded` no apply | tamanho de VM sem capacidade/cota na região (limite de 4 vCPUs na avaliação gratuita) | escolher outro tamanho no parâmetro |
 | `Could not get lock /var/lib/dpkg/lock` | unattended-upgrades rodando no primeiro boot | rodar de novo (as tarefas apt esperam até 10 min) |
+| HTTPS sem certificado (aviso no navegador) | emissão do Let's Encrypt pendente ou limitada | a loja segue por `http://`; **Operações** `logs` (service=all) e conferir `kubeshop-caddy`; o Caddy tenta de novo sozinho |
 | `/api/health/ready` = 503 | API não alcança o MongoDB | **Operações** `health`/`logs` (mongodb) → `restart` mongodb |
 | `denied` ao baixar imagem do GHCR | tag inexistente ou workflow rodado de um fork | publicar a tag com **App: publicar imagens** |
 | Plan quer recriar as VMs | `instance_name` foi alterado | voltar o nome anterior se não for intencional |

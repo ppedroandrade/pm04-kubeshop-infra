@@ -48,3 +48,25 @@
   ansible.builtin.debug:
     var: smoke.stdout
   when: run_smoke_test | bool
+
+- name: HTTPS público com certificado válido (não bloqueia o deploy)
+  ansible.builtin.uri:
+    url: "https://{{ app_fqdn }}/healthz"
+    validate_certs: true
+    status_code: 200
+  register: https_check
+  retries: 12
+  delay: 10
+  until: https_check.status == 200
+  failed_when: false
+  ignore_errors: true
+  delegate_to: localhost
+  become: false
+  when: app_fqdn | length > 0
+
+- name: Resultado do HTTPS
+  ansible.builtin.debug:
+    msg: >-
+      {{ 'HTTPS OK: https://' ~ app_fqdn ~ '/' if (https_check.status | default(0)) == 200
+         else 'HTTPS ainda sem certificado (a loja segue disponível por HTTP). Veja: docker logs kubeshop-caddy' }}
+  when: app_fqdn | length > 0

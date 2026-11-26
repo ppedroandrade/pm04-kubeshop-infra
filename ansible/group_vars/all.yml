@@ -41,5 +41,9 @@ backup_local_retention_days: 7
 kubeshop_root: /opt/kubeshop
 mongo_data_mount: /data/mongo
 app_http_port: 80
+# HTTPS automático (Caddy + Let's Encrypt) para o FQDN do IP público do Azure
+app_fqdn: ""
+caddy_tag: "2.10.2-alpine"
+acme_email: ""
 
 run_smoke_test: true

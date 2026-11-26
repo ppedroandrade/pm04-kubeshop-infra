@@ -43,11 +43,12 @@ EOF
 
 jq -n \
   --arg db_private_ip "${db_ip}" \
+  --arg app_fqdn "$(val app_fqdn)" \
   --arg mongo_root_password "$(val mongo_root_password)" \
   --arg mongo_app_password "$(val mongo_app_password)" \
   --arg backup_container_url "$(val backup_container_url)" \
   --arg backup_sas "$(val backup_sas)" \
-  '{db_private_ip: $db_private_ip, mongo_root_password: $mongo_root_password,
+  '{db_private_ip: $db_private_ip, app_fqdn: $app_fqdn, mongo_root_password: $mongo_root_password,
     mongo_app_password: $mongo_app_password, backup_container_url: $backup_container_url,
     backup_sas: $backup_sas}' > "${out_dir}/tf-vars.json"
 chmod 600 "${out_dir}/tf-vars.json"

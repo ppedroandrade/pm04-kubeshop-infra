@@ -66,7 +66,7 @@ resource "azurerm_subnet" "db" {
 }
 
 # ---------------------------------------------------------------------------
-# NSG da aplicação: só HTTP público. SSH não fica aberto: a pipeline cria uma
+# NSG da aplicação: só HTTP/HTTPS públicos. SSH não fica aberto: a pipeline cria uma
 # regra temporária para o IP do runner e a remove ao final da execução.
 # ---------------------------------------------------------------------------
 resource "azurerm_network_security_group" "app" {
@@ -84,6 +84,20 @@ resource "azurerm_network_security_rule" "app_http" {
   protocol                    = "Tcp"
   source_port_range           = "*"
   destination_port_range      = "80"
+  source_address_prefix       = "Internet"
+  destination_address_prefix  = "*"
+  resource_group_name         = azurerm_resource_group.main.name
+  network_security_group_name = azurerm_network_security_group.app.name
+}
+
+resource "azurerm_network_security_rule" "app_https" {
+  name                        = "allow-https-internet"
+  priority                    = 110
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "443"
   source_address_prefix       = "Internet"
   destination_address_prefix  = "*"
   resource_group_name         = azurerm_resource_group.main.name

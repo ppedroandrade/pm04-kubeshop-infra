@@ -11,8 +11,6 @@ services:
   frontend:
     image: {{ docker_image }}-frontend:{{ docker_tag }}
     container_name: kubeshop-frontend
-    ports:
-      - "0.0.0.0:{{ app_http_port }}:8080"
     depends_on:
       api:
         condition: service_healthy
@@ -64,8 +62,40 @@ services:
     networks: [web]
     logging: *logging
 
+  # Entrada pública: HTTP 80 e HTTPS 443 com certificado automático.
+  caddy:
+    image: caddy:{{ caddy_tag }}
+    container_name: kubeshop-caddy
+    ports:
+      - "{{ app_http_port }}:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      frontend:
+        condition: service_healthy
+    restart: unless-stopped
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, "http://127.0.0.1:80/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    networks: [web]
+    logging: *logging
+
 networks:
   web:
+
+volumes:
+  # certificados emitidos ficam aqui (evita reemissão a cada deploy)
+  caddy-data:
+  caddy-config:
 
 secrets:
   mongo_app_password:

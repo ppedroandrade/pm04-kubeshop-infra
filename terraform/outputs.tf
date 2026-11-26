@@ -19,6 +19,10 @@ output "app_fqdn" {
 }
 
 output "store_url" {
+  value = "https://${azurerm_public_ip.app.fqdn}/"
+}
+
+output "store_url_http" {
   value = "http://${azurerm_public_ip.app.fqdn}/"
 }
 

@@ -34,6 +34,13 @@
     dest: "{{ kubeshop_root }}/app/compose.yaml"
     mode: "0644"
 
+- name: Configuração do Caddy (HTTP + HTTPS automático)
+  ansible.builtin.template:
+    src: Caddyfile.j2
+    dest: "{{ kubeshop_root }}/app/Caddyfile"
+    mode: "0644"
+  register: caddyfile
+
 - name: Testar conectividade privada com o MongoDB antes do deploy
   ansible.builtin.wait_for:
     host: "{{ db_private_ip }}"
@@ -70,6 +77,10 @@
       ansible.builtin.command: docker logout {{ registry_host }}
       when: registry_token | length > 0
       changed_when: false
+
+- name: Recarregar o Caddy quando a configuração mudar
+  ansible.builtin.command: docker restart kubeshop-caddy
+  when: caddyfile.changed and not app_compose.changed
 
 - name: Resultado do deploy
   ansible.builtin.debug:
