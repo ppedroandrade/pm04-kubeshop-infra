@@ -50,6 +50,8 @@ Infraestrutura do **KubeShop** (Zibiska Korp) na Microsoft Azure, provisionada c
 | **App: publicar imagens** (`app-images.yml`) | Representa o CI/CD existente da aplicação: build das imagens `kubeshop-api` e `kubeshop-frontend` a partir do repo do cliente e push para `ghcr.io/<dono>/kubeshop-*:<tag>` | cotidiano |
 | **Infra: provisionar e configurar** (`infra.yml`) | Bootstrap do estado → `terraform fmt/validate/plan/apply` → Ansible (SO, pacotes, Docker, MongoDB, app, backup) → testes | cotidiano |
 | **Operações** (`operations.yml`) | `health`, `logs`, `restart`, `backup`, `list-backups`, `restore` (pede `RESTAURAR`) | cotidiano / restore é destrutivo |
+| **Teste E2E da loja** (`e2e.yml`) | Navegador real (Chromium) fora do Azure: catálogo, pedido, recarregar, *Meus pedidos*; confere um pedido antigo (`verify_order`); salva prints em `evidencias/` | leitura + pedido fictício |
+| **Segurança** (`security.yml`) | Gitleaks + compose sem credenciais | automático |
 | **Desativar ambiente** (`destroy.yml`) | Backup final + `terraform destroy` (pede `DESTRUIR-<env>`) | destrutivo |
 
 ### Parâmetros do workflow Infra
@@ -97,5 +99,31 @@ scripts/             bootstrap-state.sh · render-inventory.sh · ssh-access.sh
 docs/                arquitetura, custos e manual de operação
 evidencias/          prints e links das execuções
 ```
+
+## Rollback (retorno à versão anterior)
+
+| O que deu errado | Como voltar |
+|---|---|
+| Nova versão da aplicação com defeito | Rodar **Infra** de novo com o `docker_tag` anterior (ex.: `1.0.0`). O Ansible recria só api/frontend com a tag antiga, que continua no GHCR |
+| Alteração de infraestrutura indesejada | Rodar **Infra** com os parâmetros anteriores (ex.: `app_vm_size=Standard_D2s_v4`). Use antes `operation=plan` para revisar |
+| Dados corrompidos ou apagados | **Operações** → `restore` com `backup_name` do último backup bom e `confirm=RESTAURAR` |
+| Estado do Terraform danificado | Portal → `stkubeshop<hash>` → container `tfstate` → blob `<env>.tfstate` → *Versões* → promover a versão anterior (versionamento + soft delete de 14 dias) |
+
+## Segurança
+
+- Nenhuma credencial no repositório: a pipeline entra na Azure por **OIDC**, e as senhas do MongoDB e a chave SSH são geradas pelo Terraform e ficam só no state (privado, versionado).
+- Os `compose.yaml` não têm senha: usam **Docker secrets** (arquivos 0400 em `/run/secrets/*`).
+- `security.yml` roda **Gitleaks** (código + histórico) e confere o compose em todo push e antes de cada execução da Infra.
+- SSH fechado por padrão: aberto só para o IP do runner durante a execução.
+
+## Limitações
+
+- **Série B bloqueada** na assinatura de avaliação → VMs `D2s_v4` (custo maior que o ideal; ver `docs/CUSTOS.md`). Cota de **4 vCPUs**: só um ambiente ligado por vez.
+- **Ponto único de falha:** uma VM de app e uma de banco, sem réplica do MongoDB. Disponibilidade depende de reinício automático (`restart: unless-stopped`) e de backup/restore.
+- **TLS** com o domínio `*.cloudapp.azure.com` do Azure. Domínio próprio é uma evolução futura.
+- **Federação OIDC só para o branch `main`.** Pipelines rodadas de outros branches são recusadas pela Azure, de propósito.
+- O smoke test de cada `apply` cria um pedido fictício (a loja é de demonstração).
+
+Relatório completo dos testes: [docs/VALIDACAO.md](docs/VALIDACAO.md)
 
 Detalhes: [docs/OPERACAO.md](docs/OPERACAO.md) · [docs/CUSTOS.md](docs/CUSTOS.md)
