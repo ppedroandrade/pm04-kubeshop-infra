@@ -19,10 +19,14 @@ on:
         description: "Conferir que este pedido ainda existe (ex.: a1b2c3) — teste de persistência"
         type: string
         default: ""
+      save_evidence:
+        description: Salvar os prints em evidencias/ no repositório
+        type: boolean
+        default: true
 
 permissions:
   id-token: write
-  contents: read
+  contents: write   # salvar os prints em evidencias/
 
 env:
   ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
@@ -69,3 +73,17 @@ jobs:
           name: e2e-evidencias-${{ inputs.environment }}-${{ github.run_id }}
           path: e2e-evidencias/
           if-no-files-found: ignore
+
+      - name: Salvar prints em evidencias/
+        if: inputs.save_evidence && success()
+        env:
+          ORDER: ${{ steps.e2e.outputs.order }}
+        run: |
+          dest="evidencias/e2e/$(date -u +%Y%m%d-%H%M)-${{ inputs.environment }}-run${{ github.run_id }}"
+          mkdir -p "$dest" && cp e2e-evidencias/*.png "$dest/"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add evidencias/e2e
+          git commit -m "evidências: e2e ${{ inputs.environment }} run ${{ github.run_id }} ${ORDER:+(pedido #$ORDER)} [skip ci]"
+          for i in 1 2 3; do git pull --rebase -q && git push -q && break; sleep 5; done
+          echo "- Prints salvos em \`$dest\`" >> "$GITHUB_STEP_SUMMARY"
