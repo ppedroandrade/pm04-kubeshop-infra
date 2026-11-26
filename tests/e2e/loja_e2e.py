@@ -48,6 +48,8 @@ with sync_playwright() as p:
         status = page.get_by_role("status").filter(has_text="confirmado e salvo")
         expect(status).to_be_visible(timeout=20000)
         created = re.search(r"#([0-9a-f]{6})", status.inner_text()).group(1)
+        status.scroll_into_view_if_needed()
+        page.mouse.wheel(0, -200)
         shot(page, "02-pedido-confirmado")
         summary.append(f"Pedido fictício #{created} criado (POST /api/orders = 201)")
 
@@ -56,7 +58,9 @@ with sync_playwright() as p:
     page.get_by_role("button", name="Meus pedidos").click()
     expect(page.get_by_role("heading", name="Meus pedidos")).to_be_visible()
     for order in [o for o in (created, verify) if o]:
-        expect(page.get_by_text(f"Pedido #{order}")).to_be_visible(timeout=20000)
+        found = page.get_by_text(f"Pedido #{order}")
+        expect(found).to_be_visible(timeout=20000)
+        found.scroll_into_view_if_needed()
         summary.append(f"Pedido #{order} encontrado em 'Meus pedidos' após recarregar")
     shot(page, "03-meus-pedidos-apos-recarregar")
     browser.close()
