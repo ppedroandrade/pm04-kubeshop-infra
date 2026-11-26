@@ -1,0 +1,71 @@
+name: "Teste E2E da loja (navegador)"
+run-name: "e2e · ${{ inputs.environment }}${{ inputs.verify_order && format(' · confere #{0}', inputs.verify_order) || '' }} · por @${{ github.actor }}"
+
+# Valida a loja como um visitante: navegador real (Chromium) fora do Azure,
+# pela URL pública HTTPS. Gera prints como artefato da execução.
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        type: choice
+        options: [dev, homolog, prod]
+        default: dev
+      create_order:
+        description: Criar um pedido fictício novo
+        type: boolean
+        default: true
+      verify_order:
+        description: "Conferir que este pedido ainda existe (ex.: a1b2c3) — teste de persistência"
+        type: string
+        default: ""
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+  ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+  ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+  ARM_USE_OIDC: "true"
+
+jobs:
+  e2e:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure + terraform init
+        uses: ./.github/actions/azure-terraform
+        with:
+          environment: ${{ inputs.environment }}
+
+      - name: URL pública do ambiente
+        run: echo "STORE_URL=$(terraform -chdir=terraform output -raw store_url)" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar Playwright (Chromium)
+        run: |
+          pip install --quiet playwright==1.49.1
+          python -m playwright install --with-deps chromium
+
+      - name: Executar teste E2E
+        id: e2e
+        env:
+          CREATE_ORDER: ${{ inputs.create_order }}
+          VERIFY_ORDER: ${{ inputs.verify_order }}
+          OUT_DIR: e2e-evidencias
+        run: python tests/e2e/loja_e2e.py
+
+      - name: Prints do teste
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-evidencias-${{ inputs.environment }}-${{ github.run_id }}
+          path: e2e-evidencias/
+          if-no-files-found: ignore
