@@ -54,6 +54,11 @@
   no_log: true
   when: admin_enabled | bool
 
+- name: Hash da configuração do Caddy (recria o contêiner quando o Caddyfile muda)
+  ansible.builtin.set_fact:
+    caddyfile_hash: "{{ lookup('ansible.builtin.template', 'Caddyfile.j2') | hash('sha1') | truncate(12, True, '') }}"
+  no_log: true
+
 - name: Arquivo Compose da aplicação
   ansible.builtin.template:
     src: compose.yaml.j2
@@ -104,10 +109,6 @@
       ansible.builtin.command: docker logout {{ registry_host }}
       when: registry_token | length > 0
       changed_when: false
-
-- name: Recarregar o Caddy quando a configuração mudar
-  ansible.builtin.command: docker restart kubeshop-caddy
-  when: caddyfile.changed and not app_compose.changed
 
 - name: Resultado do deploy
   ansible.builtin.debug:

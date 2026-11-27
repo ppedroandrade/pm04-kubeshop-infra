@@ -88,6 +88,8 @@ services:
   caddy:
     image: caddy:{{ caddy_tag }}
     container_name: kubeshop-caddy
+    labels:
+      kubeshop.caddyfile-hash: "{{ caddyfile_hash }}"
     ports:
       - "{{ app_http_port }}:80"
       - "443:443"
