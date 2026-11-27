@@ -1,6 +1,6 @@
 # Manual de operação · KubeShop na Azure
 
-Todas as rotinas rodam em **GitHub → Actions → (workflow) → Run workflow**. Ninguém precisa acessar as VMs por SSH nem guardar senha: a pipeline entra na Azure por OIDC, lê as credenciais do Terraform State e abre o SSH só para o próprio runner durante a execução.
+As rotinas rodam em **GitHub → Actions → (workflow) → Run workflow** ou no **painel `/admin`** da loja (saúde, logs, reinício, backup, listagem e restauração). Ninguém precisa acessar as VMs por SSH nem guardar senha: a pipeline entra na Azure por OIDC, lê as credenciais do Terraform State e abre o SSH só para o próprio runner durante a execução.
 
 ## Rotinas cotidianas
 

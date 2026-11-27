@@ -75,7 +75,7 @@ Pré-requisitos (uma vez, já configurado): App Registration com credencial fede
 
 1. **Actions → App: publicar imagens → Run workflow** com `version=1.0.0`.
 2. **Actions → Infra: provisionar e configurar → Run workflow** com os parâmetros padrão.
-3. Abrir a URL da loja mostrada no resumo da execução (`https://kubeshop-dev-xxxxx.brazilsouth.cloudapp.azure.com/`).
+3. Abrir a URL da loja mostrada no resumo da execução: **https://kubeshop-dev-82631.brazilsouth.cloudapp.azure.com/** (o sufixo é fixo, derivado da assinatura: a URL se mantém mesmo se o ambiente for recriado).
 
 ### Cenários da apresentação
 
@@ -99,6 +99,23 @@ scripts/             bootstrap-state.sh · render-inventory.sh · ssh-access.sh
 docs/                arquitetura, custos e manual de operação
 evidencias/          prints e links das execuções
 ```
+
+## Painel de administração (`/admin`)
+
+`https://<loja>/admin/`: rotinas de operação sem abrir o GitHub nem as VMs.
+
+| Área | Ações |
+|---|---|
+| Aplicação | Saúde (contêineres, `/api/health/ready`, versão) · Logs API / frontend / Caddy · Reiniciar API / frontend |
+| Banco | Saúde (contêiner, healthcheck, disco) · Logs MongoDB · Reiniciar MongoDB |
+| Backups | Fazer backup agora · Listar backups · Restaurar (exige digitar `RESTAURAR`) |
+
+**Ativação:** crie o secret do repositório `ADMIN_PASSWORD` (Settings → Secrets and variables → Actions) e rode o workflow **Infra**. Sem o secret, o painel não é implantado.
+
+**Como é protegido:**
+- Só em HTTPS, com *basic auth* no Caddy (usuário `admin`; a senha fica só no GitHub Secrets e vai para a VM como hash bcrypt).
+- O contêiner `kubeshop-admin` **não publica porta** e **não tem acesso ao Docker**. Cada ação vira um SSH com uma chave exclusiva (gerada pelo Terraform), autorizada nas VMs só com `command="/usr/local/bin/kubeshop-ops"`, `no-pty` e `no-port-forwarding`. O script aceita só uma lista fechada de comandos e argumentos.
+- Toda ação é registrada (`docker logs kubeshop-admin` → linhas `[audit]`; `journalctl -t kubeshop-ops` nas VMs).
 
 ## Rollback (retorno à versão anterior)
 
