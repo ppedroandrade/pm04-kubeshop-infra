@@ -29,12 +29,6 @@
     mode: "0400"
   no_log: true
 
-- name: Arquivo Compose da aplicação
-  ansible.builtin.template:
-    src: compose.yaml.j2
-    dest: "{{ kubeshop_root }}/app/compose.yaml"
-    mode: "0644"
-
 - name: Painel /admin · arquivos do serviço
   ansible.builtin.copy:
     src: "admin/{{ item }}"
@@ -59,6 +53,12 @@
     mode: "0400"
   no_log: true
   when: admin_enabled | bool
+
+- name: Arquivo Compose da aplicação
+  ansible.builtin.template:
+    src: compose.yaml.j2
+    dest: "{{ kubeshop_root }}/app/compose.yaml"
+    mode: "0644"
 
 - name: Configuração do Caddy (HTTP + HTTPS automático)
   ansible.builtin.template:
