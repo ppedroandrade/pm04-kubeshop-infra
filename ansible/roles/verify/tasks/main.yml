@@ -94,66 +94,21 @@
   become: false
   when: admin_enabled | bool and app_fqdn | length > 0
 
-- name: Painel /admin · login com a senha do GitHub Secrets
-  ansible.builtin.uri:
-    url: "https://{{ app_fqdn }}/admin/login"
-    method: POST
-    body_format: form-urlencoded
-    body: { usuario: "{{ admin_user }}", senha: "{{ admin_password }}" }
-    follow_redirects: none
-    status_code: 303
-  register: admin_login
+- name: Painel /admin · login, rotinas (app e banco) e logout, de fora da Azure
+  ansible.builtin.script:
+    cmd: admin_check.py
+    executable: python3
+  environment:
+    FQDN: "{{ app_fqdn }}"
+    U: "{{ admin_user }}"
+    P: "{{ admin_password }}"
+  register: admin_check
+  changed_when: false
   delegate_to: localhost
   become: false
-  no_log: true
-  when: admin_enabled | bool and app_fqdn | length > 0
-
-- name: Painel /admin · com sessão executa as rotinas (app e banco)
-  ansible.builtin.uri:
-    url: "https://{{ app_fqdn }}/admin/api/run"
-    method: POST
-    headers:
-      X-KubeShop-Admin: "1"
-      Cookie: "{{ admin_login.cookies_string }}"
-    body_format: json
-    body: "{{ item }}"
-    return_content: true
-    timeout: 120
-  register: admin_checks
-  failed_when: false
-  loop:
-    - { target: app, cmd: health }
-    - { target: db, cmd: health }
-    - { target: db, cmd: list-backups }
-  loop_control:
-    label: "{{ item.target }}:{{ item.cmd }}"
-  delegate_to: localhost
-  become: false
-  no_log: true
-  when: admin_enabled | bool and app_fqdn | length > 0
-
-- name: Painel /admin · conferir resultado das rotinas
-  ansible.builtin.assert:
-    that: item.json.ok | default(false)
-    fail_msg: "{{ item.item.target }}:{{ item.item.cmd }} -> HTTP {{ item.status }} {{ (item.json | default({})).error | default('') }} {{ ((item.json | default({})).output | default(''))[:300] }} {{ item.msg | default('') }}"
-    success_msg: "{{ item.item.target }}:{{ item.item.cmd }} OK"
-  loop: "{{ admin_checks.results }}"
-  loop_control:
-    label: "{{ item.item.target }}:{{ item.item.cmd }}"
-  when: admin_enabled | bool and app_fqdn | length > 0
-
-- name: Painel /admin · encerrar a sessão de teste
-  ansible.builtin.uri:
-    url: "https://{{ app_fqdn }}/admin/logout"
-    headers: { Cookie: "{{ admin_login.cookies_string }}" }
-    follow_redirects: none
-    status_code: 303
-  delegate_to: localhost
-  become: false
-  no_log: true
   when: admin_enabled | bool and app_fqdn | length > 0
 
 - name: Painel /admin · resultado
   ansible.builtin.debug:
-    msg: "Painel OK: login, {{ admin_checks.results | map(attribute='item') | map(attribute='cmd') | list }} via SSH restrito, logout"
+    var: admin_check.stdout_lines
   when: admin_enabled | bool and app_fqdn | length > 0
