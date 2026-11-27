@@ -70,3 +70,42 @@
       {{ 'HTTPS OK: https://' ~ app_fqdn ~ '/' if (https_check.status | default(0)) == 200
          else 'HTTPS ainda sem certificado (a loja segue disponível por HTTP). Veja: docker logs kubeshop-caddy' }}
   when: app_fqdn | length > 0
+
+- name: Painel /admin · sem login deve ser recusado (401)
+  ansible.builtin.uri:
+    url: "https://{{ app_fqdn }}/admin/"
+    status_code: 401
+  delegate_to: localhost
+  become: false
+  when: admin_enabled | bool and app_fqdn | length > 0
+
+- name: Painel /admin · com login executa as rotinas (app e banco)
+  ansible.builtin.uri:
+    url: "https://{{ app_fqdn }}/admin/api/run"
+    method: POST
+    url_username: "{{ admin_user }}"
+    url_password: "{{ admin_password }}"
+    force_basic_auth: true
+    headers:
+      X-KubeShop-Admin: "1"
+    body_format: json
+    body: "{{ item }}"
+    return_content: true
+    timeout: 120
+  register: admin_checks
+  failed_when: not (admin_checks.json.ok | default(false))
+  loop:
+    - { target: app, cmd: health }
+    - { target: db, cmd: health }
+    - { target: db, cmd: list-backups }
+  loop_control:
+    label: "{{ item.target }}:{{ item.cmd }}"
+  delegate_to: localhost
+  become: false
+  no_log: true
+  when: admin_enabled | bool and app_fqdn | length > 0
+
+- name: Painel /admin · resultado
+  ansible.builtin.debug:
+    msg: "Painel OK: {{ admin_checks.results | map(attribute='item') | map(attribute='cmd') | list }} executados via SSH restrito"
+  when: admin_enabled | bool and app_fqdn | length > 0
