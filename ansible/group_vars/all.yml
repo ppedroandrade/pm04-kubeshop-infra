@@ -47,3 +47,11 @@ caddy_tag: "2.10.2-alpine"
 acme_email: ""
 
 run_smoke_test: true
+
+# Painel /admin (ativado quando o secret ADMIN_PASSWORD existe no GitHub)
+admin_password: ""
+admin_enabled: "{{ admin_password | length >= 8 }}"
+admin_user: admin
+app_private_ip: "10.20.1.10"
+admin_panel_public_key: ""
+admin_panel_private_key: ""

@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+# Comando forçado (authorized_keys "command=") da chave do painel de administração.
+# A chave do painel NÃO abre shell: só consegue executar as rotinas abaixo.
+# Uso via SSH: ssh azureops@<vm> "<comando> [argumento]"
+set -euo pipefail
+
+read -r -a args <<< "${SSH_ORIGINAL_COMMAND:-$*}"
+cmd="${args[0]:-}"
+arg="${args[1]:-}"
+role="$(cat /etc/kubeshop-role 2>/dev/null || echo unknown)"
+logger -t kubeshop-ops "role=${role} cmd=${cmd} arg=${arg} from=${SSH_CLIENT%% *}" || true
+
+deny() { echo "Comando não permitido: '${cmd} ${arg}' (VM ${role})"; exit 2; }
+ps_fmt='table {{.Names}}\t{{.Image}}\t{{.Status}}'
+
+case "${role}:${cmd}" in
+  app:health)
+    echo "== Contêineres (VM aplicação)"
+    sudo docker ps -a --filter name=kubeshop- --format "${ps_fmt}"
+    echo
+    echo "== /api/health/ready"
+    curl -s -m 5 http://127.0.0.1/api/health/ready || echo "sem resposta"
+    echo
+    echo "== /api/info"
+    curl -s -m 5 http://127.0.0.1/api/info || true
+    echo
+    ;;
+  db:health)
+    echo "== Contêiner (VM banco)"
+    sudo docker ps -a --filter name=kubeshop- --format "${ps_fmt}"
+    echo
+    echo "== Healthcheck do MongoDB: $(sudo docker inspect -f '{{.State.Health.Status}}' kubeshop-mongodb)"
+    echo "== Disco de dados"
+    df -h /data/mongo
+    ;;
+  app:logs)
+    [[ "${arg}" =~ ^(frontend|api|caddy)$ ]] || deny
+    sudo docker logs --tail 80 "kubeshop-${arg}" 2>&1
+    ;;
+  db:logs)
+    [[ "${arg}" == "mongodb" ]] || deny
+    sudo docker logs --tail 40 kubeshop-mongodb 2>&1 | cut -c1-400
+    ;;
+  app:restart)
+    [[ "${arg}" =~ ^(frontend|api)$ ]] || deny
+    sudo docker restart "kubeshop-${arg}"
+    for _ in $(seq 1 30); do
+      s="$(sudo docker inspect -f '{{.State.Health.Status}}' "kubeshop-${arg}")"
+      [[ "${s}" == "healthy" ]] && { echo "kubeshop-${arg}: healthy"; exit 0; }
+      sleep 3
+    done
+    echo "kubeshop-${arg} ainda não ficou saudável"; exit 1
+    ;;
+  db:restart)
+    [[ "${arg}" == "mongodb" ]] || deny
+    sudo docker restart kubeshop-mongodb
+    for _ in $(seq 1 40); do
+      s="$(sudo docker inspect -f '{{.State.Health.Status}}' kubeshop-mongodb)"
+      [[ "${s}" == "healthy" ]] && { echo "kubeshop-mongodb: healthy"; exit 0; }
+      sleep 3
+    done
+    echo "MongoDB ainda não ficou saudável"; exit 1
+    ;;
+  db:backup)
+    sudo /usr/local/bin/kubeshop-backup.sh
+    ;;
+  db:list-backups)
+    sudo /usr/local/bin/kubeshop-list-backups.sh
+    ;;
+  db:restore)
+    [[ "${arg}" =~ ^(latest|kubeshop-[a-z]+-[0-9]{8}T[0-9]{6}Z\.archive\.gz)$ ]] || deny
+    sudo /usr/local/bin/kubeshop-restore.sh "${arg}"
+    ;;
+  *)
+    deny
+    ;;
+esac

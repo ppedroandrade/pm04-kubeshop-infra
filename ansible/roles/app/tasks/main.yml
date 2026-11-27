@@ -18,6 +18,7 @@
   loop:
     - { path: "{{ kubeshop_root }}/app", owner: root, mode: "0755" }
     - { path: "{{ kubeshop_root }}/app/secrets", owner: "1000", mode: "0700" }
+    - { path: "{{ kubeshop_root }}/app/admin", owner: root, mode: "0755" }
 
 - name: Senha do usuário da aplicação no MongoDB (uid 1000 = usuário node da imagem)
   ansible.builtin.copy:
@@ -33,6 +34,31 @@
     src: compose.yaml.j2
     dest: "{{ kubeshop_root }}/app/compose.yaml"
     mode: "0644"
+
+- name: Painel /admin · arquivos do serviço
+  ansible.builtin.copy:
+    src: "admin/{{ item }}"
+    dest: "{{ kubeshop_root }}/app/admin/"
+    mode: "0644"
+  loop: [Dockerfile, app.py, index.html]
+  when: admin_enabled | bool
+
+- name: Painel /admin · versão da imagem (hash dos arquivos)
+  ansible.builtin.set_fact:
+    admin_build_hash: "{{ (lookup('file', 'admin/Dockerfile') ~ lookup('file', 'admin/app.py') ~ lookup('file', 'admin/index.html')) | hash('sha1') | truncate(12, True, '') }}"
+    # bcrypt com sal fixo derivado da senha: o hash não muda entre execuções (idempotente)
+    admin_password_hash: "{{ admin_password | password_hash('bcrypt', salt=(admin_password | hash('sha256'))[:22], ident='2a') if admin_enabled | bool else '' }}"
+  no_log: true
+
+- name: Painel /admin · chave SSH restrita (lida só pelo usuário do contêiner)
+  ansible.builtin.copy:
+    dest: "{{ kubeshop_root }}/app/secrets/admin-ssh-key"
+    content: "{{ admin_panel_private_key }}\n"
+    owner: "10001"
+    group: "10001"
+    mode: "0400"
+  no_log: true
+  when: admin_enabled | bool
 
 - name: Configuração do Caddy (HTTP + HTTPS automático)
   ansible.builtin.template:
@@ -67,6 +93,7 @@
         project_src: "{{ kubeshop_root }}/app"
         state: present
         pull: "{{ docker_pull_policy }}"
+        build: policy
         remove_orphans: true
         wait: true
         wait_timeout: 300

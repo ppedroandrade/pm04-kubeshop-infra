@@ -1,0 +1,24 @@
+---
+# Acesso restrito do painel de administração: uma chave SSH própria que só
+# executa o comando forçado kubeshop-ops (sem shell, sem túnel, sem PTY).
+- name: Identificar o papel da VM (app ou db)
+  ansible.builtin.copy:
+    dest: /etc/kubeshop-role
+    content: "{{ 'db' if inventory_hostname in groups['db'] else 'app' }}\n"
+    mode: "0644"
+
+- name: Script de operações permitido para o painel
+  ansible.builtin.copy:
+    src: kubeshop-ops
+    dest: /usr/local/bin/kubeshop-ops
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Autorizar a chave do painel apenas com comando forçado
+  ansible.posix.authorized_key:
+    user: "{{ ansible_user }}"
+    key: "{{ admin_panel_public_key }}"
+    key_options: 'command="/usr/local/bin/kubeshop-ops",no-port-forwarding,no-agent-forwarding,no-X11-forwarding,no-pty'
+    state: "{{ 'present' if admin_enabled | bool else 'absent' }}"
+  when: admin_panel_public_key | length > 0

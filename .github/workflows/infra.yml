@@ -165,7 +165,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install --quiet "ansible>=11,<12" && ansible --version | head -1
+      - run: pip install --quiet "ansible>=11,<12" passlib "bcrypt==4.0.1" && ansible --version | head -1
 
       - name: Liberar SSH temporário para este runner
         run: bash scripts/ssh-access.sh open
@@ -175,6 +175,7 @@ jobs:
         env:
           REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REGISTRY_USER: ${{ github.actor }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
           OWNER: ${{ github.repository_owner }}
           P_ENV: ${{ inputs.environment }}
           P_IMAGE: ${{ inputs.docker_image }}
@@ -189,9 +190,10 @@ jobs:
           jq -n \
             --arg env "$P_ENV" --arg image "$image" --arg tag "$P_TAG" --arg mongo "$P_MONGO" \
             --argjson update "$P_UPDATE" --argjson pkgs "$pkgs" \
-            --arg ruser "$REGISTRY_USER" --arg rtoken "$REGISTRY_TOKEN" \
+            --arg ruser "$REGISTRY_USER" --arg rtoken "$REGISTRY_TOKEN" --arg apass "${ADMIN_PASSWORD:-}" \
             '{environment_name:$env, docker_image:$image, docker_tag:$tag, mongo_tag:$mongo,
-              update_os:$update, extra_packages:$pkgs, registry_username:$ruser, registry_token:$rtoken}' \
+              update_os:$update, extra_packages:$pkgs, registry_username:$ruser, registry_token:$rtoken,
+              admin_password:$apass}' \
             > "$RUNNER_TEMP/kubeshop/params.json"
           chmod 600 "$RUNNER_TEMP/kubeshop/params.json"
           set -o pipefail
@@ -205,6 +207,8 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Validação externa (loja pública, banco isolado)
+        env:
+          HAS_ADMIN: ${{ secrets.ADMIN_PASSWORD != '' && 'yes' || '' }}
         run: |
           curl -fsS --retry 5 --retry-delay 5 "http://${APP_FQDN}/api/health/ready"; echo
           curl -fsS "http://${APP_FQDN}/api/info"; echo
@@ -223,6 +227,7 @@ jobs:
             echo "### Ambiente ${{ inputs.environment }}"
             echo "- Loja (HTTPS): https://${APP_FQDN}/ (${https_status})"
             echo "- Loja (HTTP): http://${APP_FQDN}/ · IP ${APP_PUBLIC_IP}"
+            if [ -n "${HAS_ADMIN}" ]; then echo "- Painel de administração: ${ADMIN_URL} (usuário admin, senha no secret ADMIN_PASSWORD)"; else echo "- Painel de administração: desativado (crie o secret ADMIN_PASSWORD)"; fi
             echo "- MongoDB: sem IP público; porta 27017 fechada para a internet"
           } >> "$GITHUB_STEP_SUMMARY"
 

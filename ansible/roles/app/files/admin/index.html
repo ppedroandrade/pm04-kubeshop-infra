@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KubeShop · Administração</title>
+<style>
+  :root { --dark:#17352a; --lime:#c4f27a; --bg:#f4f7f2; --ink:#1d2a24; --muted:#5b6f64; --line:#dbe5d6; --red:#b3261e; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background:var(--bg); color:var(--ink); }
+  header { background:var(--dark); color:#fff; padding:18px 32px; display:flex; align-items:center; gap:14px; }
+  .logo { background:var(--lime); color:var(--dark); font-weight:800; border-radius:10px; width:38px; height:38px; display:grid; place-items:center; font-size:22px; }
+  header h1 { font-size:20px; margin:0; } header small { color:var(--lime); display:block; font-size:12px; letter-spacing:1px; text-transform:uppercase; }
+  header a { margin-left:auto; color:var(--lime); font-size:14px; text-decoration:none; }
+  main { max-width:1200px; margin:24px auto; padding:0 24px; display:grid; grid-template-columns: 380px 1fr; gap:20px; }
+  .card { background:#fff; border:1px solid var(--line); border-radius:14px; padding:18px 20px; margin-bottom:16px; }
+  .card h2 { font-size:15px; margin:0 0 4px; } .card p { color:var(--muted); font-size:13px; margin:0 0 12px; }
+  .row { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:8px; }
+  button { border:0; border-radius:9px; padding:9px 12px; font-size:13px; font-weight:600; cursor:pointer; background:#eef4e8; color:var(--dark); }
+  button:hover { background:var(--lime); } button.primary { background:var(--dark); color:#fff; } button.primary:hover { background:#24503f; }
+  button.danger { background:#fbe9e7; color:var(--red); } button.danger:hover { background:var(--red); color:#fff; }
+  button:disabled { opacity:.5; cursor:wait; }
+  select, input { width:100%; padding:9px 10px; border:1px solid var(--line); border-radius:9px; font-size:13px; margin-bottom:8px; }
+  .out { background:#0f2119; color:#d6f5b0; border-radius:14px; padding:16px 18px; min-height:560px; font: 12.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; white-space:pre-wrap; overflow:auto; max-height:78vh; }
+  .status { display:flex; align-items:center; gap:10px; margin-bottom:10px; font-size:13px; color:var(--muted); }
+  .dot { width:10px; height:10px; border-radius:50%; background:#aab; } .dot.ok { background:#3fb950; } .dot.err { background:var(--red); } .dot.run { background:#e3b341; }
+  .tag { font-size:11px; background:#eef4e8; color:var(--dark); padding:2px 8px; border-radius:20px; margin-left:6px; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">k</div>
+  <div><small>KubeShop · operações</small><h1>Painel de administração</h1></div>
+  <a href="/">← voltar para a loja</a>
+</header>
+<main>
+  <section>
+    <div class="card">
+      <h2>Aplicação <span class="tag">vm-app</span></h2>
+      <p>Caddy (HTTPS), frontend React + Nginx e API Node.js.</p>
+      <div class="row"><button class="primary" data-t="app" data-c="health">Saúde</button></div>
+      <div class="row">
+        <button data-t="app" data-c="logs" data-a="api">Logs API</button>
+        <button data-t="app" data-c="logs" data-a="frontend">Logs frontend</button>
+        <button data-t="app" data-c="logs" data-a="caddy">Logs Caddy</button>
+      </div>
+      <div class="row">
+        <button data-t="app" data-c="restart" data-a="api">Reiniciar API</button>
+        <button data-t="app" data-c="restart" data-a="frontend">Reiniciar frontend</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Banco de dados <span class="tag">vm-db · privado</span></h2>
+      <p>MongoDB sem IP público, acessado só pela rede privada.</p>
+      <div class="row">
+        <button class="primary" data-t="db" data-c="health">Saúde</button>
+        <button data-t="db" data-c="logs" data-a="mongodb">Logs MongoDB</button>
+        <button data-t="db" data-c="restart" data-a="mongodb">Reiniciar MongoDB</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Backups <span class="tag">Azure Blob · 30 dias</span></h2>
+      <p>Backup automático diário às 03:00 UTC. Aqui você roda na hora, lista e restaura.</p>
+      <div class="row">
+        <button class="primary" data-t="db" data-c="backup">Fazer backup agora</button>
+        <button data-t="db" data-c="list-backups" id="btn-list">Listar backups</button>
+      </div>
+      <select id="backup"><option value="latest">latest (mais recente)</option></select>
+      <input id="confirm" placeholder="Digite RESTAURAR para confirmar" autocomplete="off">
+      <button class="danger" id="btn-restore">Restaurar backup selecionado</button>
+    </div>
+  </section>
+  <section>
+    <div class="status"><span class="dot" id="dot"></span><span id="status">Pronto. Escolha uma ação.</span></div>
+    <div class="out" id="out">Cada ação é executada nas VMs por SSH com uma chave restrita (comando forçado kubeshop-ops)
+e fica registrada no log de auditoria do painel.</div>
+  </section>
+</main>
+<script>
+  const out = document.getElementById('out'), dot = document.getElementById('dot'), st = document.getElementById('status');
+  async function run(target, cmd, arg = '', confirm = '') {
+    document.querySelectorAll('button').forEach(b => b.disabled = true);
+    dot.className = 'dot run'; st.textContent = `Executando ${target}: ${cmd} ${arg}…`;
+    out.textContent = `$ kubeshop-ops ${cmd} ${arg}   (${target})\n\n`;
+    try {
+      const r = await fetch('/admin/api/run', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-KubeShop-Admin': '1' },
+        body: JSON.stringify({ target, cmd, arg, confirm }) });
+      const j = await r.json();
+      if (j.error) { out.textContent += j.error; dot.className = 'dot err'; st.textContent = 'Recusado'; return null; }
+      out.textContent += j.output || '(sem saída)';
+      dot.className = j.ok ? 'dot ok' : 'dot err';
+      st.textContent = `${j.ok ? 'Concluído' : 'Falhou (código ' + j.code + ')'} · ${target}: ${cmd} ${arg} · ${j.at}`;
+      return j;
+    } catch (e) { out.textContent += 'Erro de comunicação: ' + e; dot.className = 'dot err'; st.textContent = 'Erro'; return null; }
+    finally { document.querySelectorAll('button').forEach(b => b.disabled = false); }
+  }
+  document.querySelectorAll('button[data-c]').forEach(b => b.addEventListener('click', async () => {
+    const j = await run(b.dataset.t, b.dataset.c, b.dataset.a || '');
+    if (j && j.ok && (b.dataset.c === 'list-backups' || b.dataset.c === 'backup')) fill(j.output);
+  }));
+  function fill(text) {
+    const sel = document.getElementById('backup');
+    const names = (text.match(/kubeshop-[a-z]+-\d{8}T\d{6}Z\.archive\.gz/g) || []);
+    sel.innerHTML = '<option value="latest">latest (mais recente)</option>' +
+      [...new Set(names)].reverse().map(n => `<option>${n}</option>`).join('');
+  }
+  document.getElementById('btn-restore').addEventListener('click', () => {
+    const name = document.getElementById('backup').value, c = document.getElementById('confirm').value.trim();
+    if (c !== 'RESTAURAR') { out.textContent = 'A restauração substitui os pedidos atuais.\nDigite RESTAURAR no campo de confirmação.'; dot.className = 'dot err'; return; }
+    run('db', 'restore', name, c).then(() => document.getElementById('confirm').value = '');
+  });
+</script>
+</body>
+</html>

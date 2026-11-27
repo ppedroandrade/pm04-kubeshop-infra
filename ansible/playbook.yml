@@ -10,6 +10,7 @@
     - os_updates
     - packages
     - docker
+    - ops_access
 
 - name: VM do banco (disco persistente, MongoDB e backups)
   hosts: db

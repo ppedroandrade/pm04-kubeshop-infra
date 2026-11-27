@@ -12,6 +12,10 @@
 }
 
 :80 {
+{% if admin_enabled | bool and app_fqdn | length > 0 %}
+	# o painel só funciona em HTTPS
+	redir /admin* https://{{ app_fqdn }}/admin/ 302
+{% endif %}
 	reverse_proxy frontend:8080
 }
 
@@ -19,6 +23,18 @@
 {{ app_fqdn }}:443 {
 	encode gzip
 	header Strict-Transport-Security "max-age=300"
-	reverse_proxy frontend:8080
+{% if admin_enabled | bool %}
+	handle /admin* {
+		basic_auth {
+			{{ admin_user }} {{ admin_password_hash }}
+		}
+		reverse_proxy kubeshop-admin:8080 {
+			header_up X-Admin-User {http.auth.user.id}
+		}
+	}
+{% endif %}
+	handle {
+		reverse_proxy frontend:8080
+	}
 }
 {% endif %}

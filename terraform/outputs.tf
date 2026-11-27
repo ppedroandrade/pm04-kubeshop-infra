@@ -65,3 +65,16 @@ output "backup_sas" {
   value     = data.azurerm_storage_account_blob_container_sas.backups.sas
   sensitive = true
 }
+
+output "admin_panel_private_key" {
+  value     = tls_private_key.admin_panel.private_key_openssh
+  sensitive = true
+}
+
+output "admin_panel_public_key" {
+  value = trimspace(tls_private_key.admin_panel.public_key_openssh)
+}
+
+output "admin_url" {
+  value = "https://${azurerm_public_ip.app.fqdn}/admin/"
+}

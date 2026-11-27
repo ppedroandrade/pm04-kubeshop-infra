@@ -18,6 +18,14 @@ resource "tls_private_key" "admin" {
   algorithm = "ED25519"
 }
 
+# Chave exclusiva do painel /admin: nas VMs ela só executa o comando forçado
+# kubeshop-ops (sem shell). Separada da chave usada pela pipeline.
+resource "tls_private_key" "admin_panel" {
+  algorithm = "ED25519"
+}
+
+data "azurerm_client_config" "current" {}
+
 resource "random_password" "mongo_root" {
   length  = 32
   special = false
@@ -25,12 +33,6 @@ resource "random_password" "mongo_root" {
 
 resource "random_password" "mongo_app" {
   length  = 32
-  special = false
-}
-
-resource "random_string" "dns_suffix" {
-  length  = 5
-  upper   = false
   special = false
 }
 
@@ -176,7 +178,8 @@ resource "azurerm_public_ip" "app" {
   resource_group_name = azurerm_resource_group.main.name
   allocation_method   = "Static"
   sku                 = "Standard"
-  domain_name_label   = "${local.name_prefix}-${random_string.dns_suffix.result}"
+  # Sufixo fixo derivado da assinatura: a URL não muda se o ambiente for recriado
+  domain_name_label   = "${local.name_prefix}-${substr(sha1(data.azurerm_client_config.current.subscription_id), 0, 5)}"
   tags                = local.tags
 }
 

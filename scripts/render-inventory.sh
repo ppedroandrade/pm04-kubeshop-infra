@@ -44,11 +44,15 @@ EOF
 jq -n \
   --arg db_private_ip "${db_ip}" \
   --arg app_fqdn "$(val app_fqdn)" \
+  --arg app_private_ip "$(val app_private_ip)" \
+  --arg admin_panel_public_key "$(jq -r '.admin_panel_public_key.value // ""' "${tf_json}")" \
+  --arg admin_panel_private_key "$(jq -r '.admin_panel_private_key.value // ""' "${tf_json}")" \
   --arg mongo_root_password "$(val mongo_root_password)" \
   --arg mongo_app_password "$(val mongo_app_password)" \
   --arg backup_container_url "$(val backup_container_url)" \
   --arg backup_sas "$(val backup_sas)" \
-  '{db_private_ip: $db_private_ip, app_fqdn: $app_fqdn, mongo_root_password: $mongo_root_password,
+  '{db_private_ip: $db_private_ip, app_fqdn: $app_fqdn, app_private_ip: $app_private_ip,
+    admin_panel_public_key: $admin_panel_public_key, admin_panel_private_key: $admin_panel_private_key, mongo_root_password: $mongo_root_password,
     mongo_app_password: $mongo_app_password, backup_container_url: $backup_container_url,
     backup_sas: $backup_sas}' > "${out_dir}/tf-vars.json"
 chmod 600 "${out_dir}/tf-vars.json"
@@ -57,6 +61,7 @@ chmod 600 "${out_dir}/tf-vars.json"
   echo "APP_PUBLIC_IP=${app_ip}"
   echo "APP_FQDN=$(val app_fqdn)"
   echo "STORE_URL=$(val store_url)"
+  echo "ADMIN_URL=$(jq -r '.admin_url.value // ""' "${tf_json}")"
   echo "RESOURCE_GROUP=$(val resource_group)"
   echo "APP_NSG=$(val app_nsg_name)"
   echo "INVENTORY=${out_dir}/hosts.ini"
