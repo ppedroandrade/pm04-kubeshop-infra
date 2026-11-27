@@ -1,6 +1,8 @@
 locals {
   name_prefix = "${var.instance_name}-${var.environment}"
   app_vm_name = "vm-${var.instance_name}-app-${var.environment}"
+  dns_label   = "${var.instance_name}-${var.environment}-${substr(sha1(data.azurerm_client_config.current.subscription_id), 0, 5)}"
+  app_fqdn    = "${local.dns_label}.${var.location}.cloudapp.azure.com"
   db_vm_name  = "vm-${var.instance_name}-db-${var.environment}"
 
   tags = merge({
@@ -179,7 +181,7 @@ resource "azurerm_public_ip" "app" {
   resource_group_name = azurerm_resource_group.main.name
   allocation_method   = "Static"
   sku                 = "Standard"
-  domain_name_label   = "${local.name_prefix}-${substr(sha1(data.azurerm_client_config.current.subscription_id), 0, 5)}"
+  domain_name_label   = local.dns_label
   tags                = local.tags
 }
 

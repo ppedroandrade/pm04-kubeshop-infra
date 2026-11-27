@@ -15,15 +15,15 @@ output "app_public_ip" {
 }
 
 output "app_fqdn" {
-  value = azurerm_public_ip.app.fqdn
+  value = local.app_fqdn
 }
 
 output "store_url" {
-  value = "https://${azurerm_public_ip.app.fqdn}/"
+  value = "https://${local.app_fqdn}/"
 }
 
 output "store_url_http" {
-  value = "http://${azurerm_public_ip.app.fqdn}/"
+  value = "http://${local.app_fqdn}/"
 }
 
 output "app_private_ip" {
@@ -76,5 +76,5 @@ output "admin_panel_public_key" {
 }
 
 output "admin_url" {
-  value = "https://${azurerm_public_ip.app.fqdn}/admin/"
+  value = "https://${local.app_fqdn}/admin/"
 }
