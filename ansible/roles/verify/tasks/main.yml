@@ -120,7 +120,7 @@
     return_content: true
     timeout: 120
   register: admin_checks
-  failed_when: not (admin_checks.json.ok | default(false))
+  failed_when: false
   loop:
     - { target: app, cmd: health }
     - { target: db, cmd: health }
@@ -130,6 +130,16 @@
   delegate_to: localhost
   become: false
   no_log: true
+  when: admin_enabled | bool and app_fqdn | length > 0
+
+- name: Painel /admin · conferir resultado das rotinas
+  ansible.builtin.assert:
+    that: item.json.ok | default(false)
+    fail_msg: "{{ item.item.target }}:{{ item.item.cmd }} -> HTTP {{ item.status }} {{ (item.json | default({})).error | default('') }} {{ ((item.json | default({})).output | default(''))[:300] }} {{ item.msg | default('') }}"
+    success_msg: "{{ item.item.target }}:{{ item.item.cmd }} OK"
+  loop: "{{ admin_checks.results }}"
+  loop_control:
+    label: "{{ item.item.target }}:{{ item.item.cmd }}"
   when: admin_enabled | bool and app_fqdn | length > 0
 
 - name: Painel /admin · encerrar a sessão de teste
