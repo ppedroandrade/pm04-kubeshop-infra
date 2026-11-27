@@ -172,13 +172,13 @@ resource "azurerm_subnet_network_security_group_association" "db" {
 # ---------------------------------------------------------------------------
 # IP público (somente na VM da aplicação) com rótulo DNS do Azure
 # ---------------------------------------------------------------------------
+# Sufixo do DNS fixo, derivado da assinatura: a URL não muda se o ambiente for recriado.
 resource "azurerm_public_ip" "app" {
   name                = "pip-${local.name_prefix}-app"
   location            = azurerm_resource_group.main.location
   resource_group_name = azurerm_resource_group.main.name
   allocation_method   = "Static"
   sku                 = "Standard"
-  # Sufixo fixo derivado da assinatura: a URL não muda se o ambiente for recriado
   domain_name_label   = "${local.name_prefix}-${substr(sha1(data.azurerm_client_config.current.subscription_id), 0, 5)}"
   tags                = local.tags
 }
