@@ -113,7 +113,9 @@ evidencias/          prints e links das execuções
 **Ativação:** crie o secret do repositório `ADMIN_PASSWORD` (Settings → Secrets and variables → Actions) e rode o workflow **Infra**. Sem o secret, o painel não é implantado.
 
 **Como é protegido:**
-- Só em HTTPS, com *basic auth* no Caddy (usuário `admin`; a senha fica só no GitHub Secrets e vai para a VM como hash bcrypt).
+- Tela de login própria, só em HTTPS (usuário `admin`). A senha fica só no GitHub Secrets e vai para a VM como hash **PBKDF2-SHA256** (310 mil iterações), comparado em tempo constante.
+- Sessão por cookie aleatório de 256 bits (`HttpOnly`, `Secure`, `SameSite=Strict`, só em `/admin`). Expira com **10 min sem uso** ou 1 h no total, e termina ao clicar em *Sair* ou *voltar para a loja*.
+- **Bloqueio de força bruta:** 5 erros em 15 min por IP bloqueiam o login por 15 min. A origem das requisições é conferida (anti-CSRF).
 - O contêiner `kubeshop-admin` **não publica porta** e **não tem acesso ao Docker**. Cada ação vira um SSH com uma chave exclusiva (gerada pelo Terraform), autorizada nas VMs só com `command="/usr/local/bin/kubeshop-ops"`, `no-pty` e `no-port-forwarding`. O script aceita só uma lista fechada de comandos e argumentos.
 - Toda ação é registrada (`docker logs kubeshop-admin` → linhas `[audit]`; `journalctl -t kubeshop-ops` nas VMs).
 
