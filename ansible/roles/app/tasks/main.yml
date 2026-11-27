@@ -34,15 +34,42 @@
     src: "admin/{{ item }}"
     dest: "{{ kubeshop_root }}/app/admin/"
     mode: "0644"
-  loop: [Dockerfile, app.py, index.html]
+  loop: [Dockerfile, app.py, index.html, login.html]
   when: admin_enabled | bool
 
 - name: Painel /admin · versão da imagem (hash dos arquivos)
   ansible.builtin.set_fact:
-    admin_build_hash: "{{ (lookup('file', 'admin/Dockerfile') ~ lookup('file', 'admin/app.py') ~ lookup('file', 'admin/index.html')) | hash('sha1') | truncate(12, True, '') }}"
-    # bcrypt com sal fixo derivado da senha: o hash não muda entre execuções (idempotente)
-    admin_password_hash: "{{ admin_password | password_hash('bcrypt', salt=(admin_password | hash('sha256'))[:22], ident='2a') if admin_enabled | bool else '' }}"
+    admin_build_hash: "{{ (lookup('file', 'admin/Dockerfile') ~ lookup('file', 'admin/app.py') ~ lookup('file', 'admin/index.html') ~ lookup('file', 'admin/login.html')) | hash('sha1') | truncate(12, True, '') }}"
+
+- name: Painel /admin · hash PBKDF2-SHA256 da senha (sal fixo derivado da senha = idempotente)
+  ansible.builtin.command:
+    argv:
+      - python3
+      - -c
+      - |
+        import base64, hashlib, os, sys
+        p = os.environ["P"].encode()
+        salt = hashlib.sha256(b"kubeshop-admin:" + p).digest()[:16]
+        h = hashlib.pbkdf2_hmac("sha256", p, salt, 310000)
+        print("pbkdf2_sha256$310000$" + base64.b64encode(salt).decode() + "$" + base64.b64encode(h).decode())
+  environment:
+    P: "{{ admin_password }}"
+  delegate_to: localhost
+  become: false
+  register: admin_hash_cmd
+  changed_when: false
   no_log: true
+  when: admin_enabled | bool
+
+- name: Painel /admin · gravar o hash da senha (lido só pelo usuário do contêiner)
+  ansible.builtin.copy:
+    dest: "{{ kubeshop_root }}/app/secrets/admin-password-hash"
+    content: "{{ admin_hash_cmd.stdout }}\n"
+    owner: "10001"
+    group: "10001"
+    mode: "0400"
+  no_log: true
+  when: admin_enabled | bool
 
 - name: Painel /admin · chave SSH restrita (lida só pelo usuário do contêiner)
   ansible.builtin.copy:

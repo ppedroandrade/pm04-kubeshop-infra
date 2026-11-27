@@ -11,7 +11,9 @@
   header { background:var(--dark); color:#fff; padding:18px 32px; display:flex; align-items:center; gap:14px; }
   .logo { background:var(--lime); color:var(--dark); font-weight:800; border-radius:10px; width:38px; height:38px; display:grid; place-items:center; font-size:22px; }
   header h1 { font-size:20px; margin:0; } header small { color:var(--lime); display:block; font-size:12px; letter-spacing:1px; text-transform:uppercase; }
-  header a { margin-left:auto; color:var(--lime); font-size:14px; text-decoration:none; }
+  .who { margin-left:auto; display:flex; align-items:center; gap:18px; font-size:13px; }
+  .who span { color:#9db8a8; } .who a { color:var(--lime); text-decoration:none; }
+  .who a.out-btn { background:var(--lime); color:var(--dark); padding:7px 14px; border-radius:9px; font-weight:700; }
   main { max-width:1200px; margin:24px auto; padding:0 24px; display:grid; grid-template-columns: 380px 1fr; gap:20px; }
   .card { background:#fff; border:1px solid var(--line); border-radius:14px; padding:18px 20px; margin-bottom:16px; }
   .card h2 { font-size:15px; margin:0 0 4px; } .card p { color:var(--muted); font-size:13px; margin:0 0 12px; }
@@ -32,7 +34,7 @@
 <header>
   <div class="logo">k</div>
   <div><small>KubeShop · operações</small><h1>Painel de administração</h1></div>
-  <a href="/">← voltar para a loja</a>
+  <div class="who"><span id="timer">sessão: 10:00</span><a href="/admin/logout?loja">← voltar para a loja</a><a class="out-btn" href="/admin/logout">Sair</a></div>
 </header>
 <main>
   <section>
@@ -86,7 +88,9 @@ e fica registrada no log de auditoria do painel.</div>
     try {
       const r = await fetch('/admin/api/run', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-KubeShop-Admin': '1' },
         body: JSON.stringify({ target, cmd, arg, confirm }) });
+      if (r.status === 401) { location.href = '/admin/login'; return null; }
       const j = await r.json();
+      resetTimer();
       if (j.error) { out.textContent += j.error; dot.className = 'dot err'; st.textContent = 'Recusado'; return null; }
       out.textContent += j.output || '(sem saída)';
       dot.className = j.ok ? 'dot ok' : 'dot err';
@@ -105,6 +109,14 @@ e fica registrada no log de auditoria do painel.</div>
     sel.innerHTML = '<option value="latest">latest (mais recente)</option>' +
       [...new Set(names)].reverse().map(n => `<option>${n}</option>`).join('');
   }
+  // a sessão expira após 10 min sem uso: mostra a contagem e volta ao login
+  let left = 600;
+  function resetTimer() { left = 600; }
+  setInterval(() => {
+    left--; const m = String(Math.floor(left / 60)).padStart(2, '0'), s = String(left % 60).padStart(2, '0');
+    document.getElementById('timer').textContent = `sessão: ${m}:${s}`;
+    if (left <= 0) location.href = '/admin/logout';
+  }, 1000);
   document.getElementById('btn-restore').addEventListener('click', () => {
     const name = document.getElementById('backup').value, c = document.getElementById('confirm').value.trim();
     if (c !== 'RESTAURAR') { out.textContent = 'A restauração substitui os pedidos atuais.\nDigite RESTAURAR no campo de confirmação.'; dot.className = 'dot err'; return; }

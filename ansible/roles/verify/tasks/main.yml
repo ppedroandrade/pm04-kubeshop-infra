@@ -71,23 +71,50 @@
          else 'HTTPS ainda sem certificado (a loja segue disponível por HTTP). Veja: docker logs kubeshop-caddy' }}
   when: app_fqdn | length > 0
 
-- name: Painel /admin · sem login deve ser recusado (401)
+- name: Painel /admin · sem login redireciona para a tela de login
   ansible.builtin.uri:
     url: "https://{{ app_fqdn }}/admin/"
+    follow_redirects: none
+    status_code: 303
+  register: admin_noauth
+  failed_when: admin_noauth.status != 303 or '/admin/login' not in (admin_noauth.location | default(''))
+  delegate_to: localhost
+  become: false
+  when: admin_enabled | bool and app_fqdn | length > 0
+
+- name: Painel /admin · API sem sessão é recusada (401)
+  ansible.builtin.uri:
+    url: "https://{{ app_fqdn }}/admin/api/run"
+    method: POST
+    headers: { X-KubeShop-Admin: "1" }
+    body_format: json
+    body: { target: app, cmd: health }
     status_code: 401
   delegate_to: localhost
   become: false
   when: admin_enabled | bool and app_fqdn | length > 0
 
-- name: Painel /admin · com login executa as rotinas (app e banco)
+- name: Painel /admin · login com a senha do GitHub Secrets
+  ansible.builtin.uri:
+    url: "https://{{ app_fqdn }}/admin/login"
+    method: POST
+    body_format: form-urlencoded
+    body: { usuario: "{{ admin_user }}", senha: "{{ admin_password }}" }
+    follow_redirects: none
+    status_code: 303
+  register: admin_login
+  delegate_to: localhost
+  become: false
+  no_log: true
+  when: admin_enabled | bool and app_fqdn | length > 0
+
+- name: Painel /admin · com sessão executa as rotinas (app e banco)
   ansible.builtin.uri:
     url: "https://{{ app_fqdn }}/admin/api/run"
     method: POST
-    url_username: "{{ admin_user }}"
-    url_password: "{{ admin_password }}"
-    force_basic_auth: true
     headers:
       X-KubeShop-Admin: "1"
+      Cookie: "{{ admin_login.cookies_string }}"
     body_format: json
     body: "{{ item }}"
     return_content: true
@@ -105,7 +132,18 @@
   no_log: true
   when: admin_enabled | bool and app_fqdn | length > 0
 
+- name: Painel /admin · encerrar a sessão de teste
+  ansible.builtin.uri:
+    url: "https://{{ app_fqdn }}/admin/logout"
+    headers: { Cookie: "{{ admin_login.cookies_string }}" }
+    follow_redirects: none
+    status_code: 303
+  delegate_to: localhost
+  become: false
+  no_log: true
+  when: admin_enabled | bool and app_fqdn | length > 0
+
 - name: Painel /admin · resultado
   ansible.builtin.debug:
-    msg: "Painel OK: {{ admin_checks.results | map(attribute='item') | map(attribute='cmd') | list }} executados via SSH restrito"
+    msg: "Painel OK: login, {{ admin_checks.results | map(attribute='item') | map(attribute='cmd') | list }} via SSH restrito, logout"
   when: admin_enabled | bool and app_fqdn | length > 0

@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>KubeShop · Entrar no painel</title>
+<style>
+  :root { --dark:#17352a; --dark2:#1f4636; --lime:#c4f27a; --bg:#f4f7f2; --ink:#1d2a24; --muted:#5b6f64; --line:#dbe5d6; --red:#b3261e; }
+  * { box-sizing: border-box; }
+  body { margin:0; min-height:100vh; display:grid; grid-template-columns: 1.1fr 1fr; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color:var(--ink); background:var(--bg); }
+  .brand { background: radial-gradient(1200px 600px at 20% 10%, var(--dark2), var(--dark)); color:#fff; padding:56px 64px; display:flex; flex-direction:column; justify-content:space-between; position:relative; overflow:hidden; }
+  .brand::after { content:"k"; position:absolute; right:-30px; bottom:-120px; font-size:520px; font-weight:900; color:var(--lime); opacity:.08; line-height:1; }
+  .logo { display:flex; align-items:center; gap:12px; font-size:24px; font-weight:700; }
+  .logo span { background:var(--lime); color:var(--dark); width:44px; height:44px; border-radius:12px; display:grid; place-items:center; font-size:26px; font-weight:900; }
+  .brand h1 { font-size:44px; line-height:1.1; margin:0 0 14px; max-width:520px; }
+  .brand h1 em { color:var(--lime); font-style:normal; }
+  .brand p { color:#cfe3d6; max-width:460px; line-height:1.55; margin:0; }
+  .chips { display:flex; gap:10px; flex-wrap:wrap; margin-top:28px; }
+  .chip { border:1px solid rgba(196,242,122,.35); color:var(--lime); border-radius:30px; padding:7px 14px; font-size:13px; }
+  .foot { font-size:12px; color:#9db8a8; }
+  .panel { display:grid; place-items:center; padding:40px; }
+  form { width:100%; max-width:380px; background:#fff; border:1px solid var(--line); border-radius:20px; padding:34px 32px; box-shadow:0 20px 50px rgba(23,53,42,.08); }
+  form h2 { margin:0 0 6px; font-size:24px; } form .sub { margin:0 0 24px; color:var(--muted); font-size:14px; }
+  label { display:block; font-size:13px; font-weight:600; margin:14px 0 6px; }
+  .field { position:relative; }
+  input { width:100%; padding:13px 14px; border:1.5px solid var(--line); border-radius:12px; font-size:15px; outline:none; transition:border-color .15s, box-shadow .15s; background:#fbfdf9; }
+  input:focus { border-color:var(--dark); box-shadow:0 0 0 4px rgba(196,242,122,.45); background:#fff; }
+  .toggle { position:absolute; right:10px; top:50%; transform:translateY(-50%); background:none; border:0; color:var(--muted); font-size:12px; cursor:pointer; padding:6px; }
+  button.submit { width:100%; margin-top:24px; padding:14px; border:0; border-radius:12px; background:var(--dark); color:#fff; font-size:15px; font-weight:700; cursor:pointer; display:flex; justify-content:center; gap:8px; transition:transform .05s, background .15s; }
+  button.submit:hover { background:var(--dark2); } button.submit:active { transform:scale(.99); }
+  button.submit span { color:var(--lime); }
+  .error { background:#fdecea; color:var(--red); border:1px solid #f5c2bd; padding:11px 13px; border-radius:10px; font-size:13.5px; margin-bottom:6px; }
+  .secure { display:flex; align-items:center; gap:8px; color:var(--muted); font-size:12px; margin-top:18px; justify-content:center; }
+  .secure i { width:8px; height:8px; border-radius:50%; background:#3fb950; display:inline-block; }
+  .back { display:block; text-align:center; margin-top:14px; color:var(--dark); font-size:13px; text-decoration:none; }
+  @media (max-width: 860px) { body { grid-template-columns: 1fr; } .brand { display:none; } }
+</style>
+</head>
+<body>
+  <section class="brand">
+    <div class="logo"><span>k</span>kubeshop</div>
+    <div>
+      <h1>Painel de <em>operações</em> da loja.</h1>
+      <p>Saúde dos serviços, logs, reinício, backups e restauração, sem acessar os servidores. Cada ação passa por um acesso restrito e fica registrada.</p>
+      <div class="chips"><div class="chip">HTTPS</div><div class="chip">Sessão de 10 min</div><div class="chip">Auditoria</div><div class="chip">Banco privado</div></div>
+    </div>
+    <div class="foot">Zibiska Korp · KubeShop na Azure</div>
+  </section>
+  <section class="panel">
+    <form method="post" action="/admin/login" autocomplete="off">
+      <h2>Entrar</h2>
+      <p class="sub">Acesso restrito à equipe de operações.</p>
+      {{ERROR}}
+      <label for="usuario">Usuário</label>
+      <input id="usuario" name="usuario" autocomplete="username" required autofocus>
+      <label for="senha">Senha</label>
+      <div class="field">
+        <input id="senha" name="senha" type="password" autocomplete="current-password" required>
+        <button type="button" class="toggle" onclick="const s=document.getElementById('senha');s.type=s.type==='password'?'text':'password';this.textContent=s.type==='password'?'mostrar':'ocultar'">mostrar</button>
+      </div>
+      <button class="submit" type="submit">Entrar no painel <span>→</span></button>
+      <div class="secure"><i></i> Conexão segura · 5 tentativas a cada 15 min</div>
+      <a class="back" href="/">← voltar para a loja</a>
+    </form>
+  </section>
+</body>
+</html>

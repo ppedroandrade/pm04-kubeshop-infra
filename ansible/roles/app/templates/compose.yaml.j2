@@ -73,7 +73,9 @@ services:
       APP_HOST: "{{ app_private_ip }}"
       DB_HOST: "{{ db_private_ip }}"
       SSH_USER: "{{ ansible_user }}"
-    secrets: [admin_ssh_key]
+      ADMIN_USER: "{{ admin_user }}"
+      PUBLIC_HOST: "{{ app_fqdn }}"
+    secrets: [admin_ssh_key, admin_password_hash]
     restart: unless-stopped
     read_only: true
     tmpfs:
@@ -127,4 +129,6 @@ secrets:
 {% if admin_enabled | bool %}
   admin_ssh_key:
     file: ./secrets/admin-ssh-key
+  admin_password_hash:
+    file: ./secrets/admin-password-hash
 {% endif %}

@@ -24,12 +24,10 @@
 	encode gzip
 	header Strict-Transport-Security "max-age=300"
 {% if admin_enabled | bool %}
+	# login, sessão e bloqueio de força bruta ficam no próprio painel
 	handle /admin* {
-		basic_auth {
-			{{ admin_user }} {{ admin_password_hash }}
-		}
 		reverse_proxy kubeshop-admin:8080 {
-			header_up X-Admin-User {http.auth.user.id}
+			header_up X-Forwarded-For {remote_host}
 		}
 	}
 {% endif %}
